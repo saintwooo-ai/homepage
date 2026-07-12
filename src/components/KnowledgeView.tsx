@@ -1,563 +1,391 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import React, { useEffect, useMemo, useState } from 'react';
+import { Database, RefreshCw, Search, ShieldCheck, AlertCircle, CheckCircle2, XCircle, FileText, GitBranch, Tags, BookOpen } from 'lucide-react';
+import { KnowledgePipeline } from '../types';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Database, 
-  BookOpen, 
-  Layers, 
-  FileCheck, 
-  AlertCircle, 
-  XOctagon, 
-  Hash, 
-  Link2,
-  FileText,
-  Folder,
-  FolderOpen,
-  ChevronRight,
-  ChevronDown,
-  Eye,
-  Share2,
-  Download,
-  Terminal,
-  Compass,
-  CornerDownRight,
-  Info
-} from 'lucide-react';
-import { KnowledgePipeline, KnowledgeDoc } from '../types';
-import { MOCK_KNOWLEDGE_DOCS } from '../mockData';
+type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'needs_revision';
+
+type KnowledgeItem = {
+  id: string;
+  item_type: string;
+  title: string;
+  one_line_summary: string;
+  body: string | null;
+  category: string | null;
+  target_audience: string | null;
+  rfp_use: string;
+  evidence_level: string;
+  review_status: string;
+  reuse_grade: string;
+  risk_flags: string[] | null;
+  updated_at: string;
+  source_id: string | null;
+};
+
+type ReviewQueueItem = {
+  id: string;
+  item_id: string;
+  source_id: string | null;
+  queue_status: ReviewStatus;
+  priority: string;
+  notes: string | null;
+  created_at: string;
+  knowledge_items?: KnowledgeItem | null;
+};
+
+type SourceItem = {
+  id: string;
+  source_type: string;
+  title: string;
+  publisher: string | null;
+  summary: string | null;
+  collected_at: string;
+};
 
 interface KnowledgeViewProps {
   knowledge: KnowledgePipeline;
 }
 
+const statusLabel: Record<string, string> = {
+  inbox: '수집함',
+  reviewed: '검토됨',
+  approved: '승인됨',
+  needs_verification: '검증 필요',
+  rejected: '반려',
+  deprecated: '폐기',
+  pending: '검토 대기',
+  needs_revision: '수정 필요',
+};
+
+const evidenceLabel: Record<string, string> = {
+  official: '공식발표',
+  reported: '기사보도',
+  data_backed: '수치근거',
+  inferred: '추정',
+  unverified_original: '원문미확인',
+  needs_verification: '검증 필요',
+};
+
 export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
-  // 문서 리스트 상태 관리
-  const [docs, setDocs] = useState<KnowledgeDoc[]>(MOCK_KNOWLEDGE_DOCS);
-  const [selectedDocId, setSelectedDocId] = useState<string>('doc_001');
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
-    root: true,
-    inbox: true,
-    sources: true,
-    research: true,
-    atomic: true
-  });
-  const [activeFolderFilter, setActiveFolderFilter] = useState<string>('all');
+  const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
+  const [items, setItems] = useState<KnowledgeItem[]>([]);
+  const [sources, setSources] = useState<SourceItem[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const selectedDoc = docs.find(d => d.id === selectedDocId) || docs[0];
+  const selectedItem = useMemo(
+    () => items.find((item) => item.id === selectedItemId) ?? reviewQueue.find((row) => row.knowledge_items?.id === selectedItemId)?.knowledge_items ?? items[0] ?? null,
+    [items, reviewQueue, selectedItemId]
+  );
 
-  // 폴더 확장/축소 토글
-  const toggleFolder = (folderKey: string) => {
-    setExpandedFolders(prev => ({
-      ...prev,
-      [folderKey]: !prev[folderKey]
-    }));
-  };
+  const filteredItems = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) =>
+      [item.title, item.one_line_summary, item.category, item.target_audience, item.rfp_use]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q))
+    );
+  }, [items, query]);
 
-  // 마크다운 초간단 뷰어 파서 함수 (JSX 변환)
-  const renderMarkdown = (content: string) => {
-    const lines = content.split('\n');
-    return lines.map((line, idx) => {
-      const trimmed = line.trim();
-      
-      // 1. 헤더 처리
-      if (trimmed.startsWith('# ')) {
-        return (
-          <h1 key={idx} className="text-lg font-bold text-white border-b border-gray-800 pb-2 mt-4 mb-3 font-sans tracking-tight">
-            {trimmed.slice(2)}
-          </h1>
-        );
-      }
-      if (trimmed.startsWith('## ')) {
-        return (
-          <h2 key={idx} className="text-sm font-semibold text-indigo-400 mt-4 mb-2 flex items-center gap-1.5 font-sans">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-            {trimmed.slice(3)}
-          </h2>
-        );
-      }
-      if (trimmed.startsWith('### ')) {
-        return (
-          <h3 key={idx} className="text-xs font-semibold text-cyan-300 mt-3 mb-1 font-sans">
-            {trimmed.slice(4)}
-          </h3>
-        );
-      }
+  async function loadKnowledge() {
+    if (!supabase) return;
+    setLoading(true);
+    setError(null);
+    setMessage(null);
 
-      // 2. 인용구 처리
-      if (trimmed.startsWith('> ')) {
-        return (
-          <blockquote key={idx} className="border-l-2 border-indigo-500 bg-indigo-950/20 px-3 py-2 my-2 rounded-r-lg text-[11px] text-indigo-200 italic font-mono leading-relaxed">
-            {trimmed.slice(2)}
-          </blockquote>
-        );
-      }
+    const queueQuery = supabase
+      .from('knowledge_review_queue')
+      .select('id,item_id,source_id,queue_status,priority,notes,created_at,knowledge_items(*)')
+      .order('created_at', { ascending: false })
+      .limit(30);
 
-      // 3. 코드 블록 시작/종료 또는 백틱 감싸진 부분
-      if (trimmed.startsWith('```')) {
-        return null; // 간단 변환을 위해 코드 블록 마커는 생략
-      }
-      if (line.includes('`')) {
-        // 백틱 인라인 코드 처리
-        const parts = line.split('`');
-        return (
-          <p key={idx} className="text-[11px] text-gray-300 leading-relaxed font-mono my-1">
-            {parts.map((part, pIdx) => pIdx % 2 === 1 ? (
-              <code key={pIdx} className="bg-gray-950 px-1.5 py-0.5 rounded text-indigo-400 border border-gray-800 font-bold">{part}</code>
-            ) : part)}
-          </p>
-        );
-      }
-
-      // 4. 리스트 아이템
-      if (trimmed.startsWith('* ')) {
-        const itemText = trimmed.slice(2);
-        
-        // 위키링크 파싱 [[Link]]
-        const wikiLinkRegex = /\[\[(.*?)\]\]/g;
-        if (wikiLinkRegex.test(itemText)) {
-          const parts = itemText.split(wikiLinkRegex);
-          return (
-            <li key={idx} className="list-disc list-inside text-[11px] text-gray-300 ml-2 my-1 leading-relaxed">
-              {parts.map((part, pIdx) => {
-                if (pIdx % 2 === 1) {
-                  // 해당 링크를 가진 문서 검색
-                  const linkedDoc = docs.find(d => d.name.toLowerCase().startsWith(part.toLowerCase()));
-                  return (
-                    <button 
-                      key={pIdx}
-                      onClick={() => linkedDoc && setSelectedDocId(linkedDoc.id)}
-                      className={`px-1.5 py-0.2 bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-900/80 rounded font-bold text-[10px] text-indigo-300 transition-colors cursor-pointer mx-0.5 inline-flex items-center gap-0.5 ${linkedDoc ? '' : 'opacity-60 border-dashed bg-transparent text-gray-400'}`}
-                    >
-                      <Link2 className="w-3 h-3 text-indigo-400" />
-                      [[{part}]]
-                    </button>
-                  );
-                }
-                return part;
-              })}
-            </li>
-          );
-        }
-
-        return (
-          <li key={idx} className="list-disc list-inside text-[11px] text-gray-300 ml-2 my-1 leading-relaxed">
-            {itemText}
-          </li>
-        );
-      }
-
-      // 5. 일반 텍스트 라인 내 Wiki 링크 파싱
-      const wikiLinkRegex = /\[\[(.*?)\]\]/g;
-      if (wikiLinkRegex.test(trimmed)) {
-        const parts = trimmed.split(wikiLinkRegex);
-        return (
-          <p key={idx} className="text-[11px] text-gray-300 leading-relaxed my-1.5">
-            {parts.map((part, pIdx) => {
-              if (pIdx % 2 === 1) {
-                const linkedDoc = docs.find(d => d.name.toLowerCase().startsWith(part.toLowerCase()));
-                return (
-                  <button 
-                    key={pIdx}
-                    onClick={() => linkedDoc && setSelectedDocId(linkedDoc.id)}
-                    className="px-1.5 py-0.2 bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-900/80 rounded font-bold text-[10px] text-indigo-300 transition-colors cursor-pointer inline-flex items-center gap-0.5"
-                  >
-                    <Link2 className="w-3 h-3 text-indigo-400" />
-                    [[{part}]]
-                  </button>
-                );
-              }
-              return part;
-            })}
-          </p>
-        );
-      }
-
-      // 6. 공백 처리
-      if (trimmed === '') {
-        return <div key={idx} className="h-2" />;
-      }
-
-      return (
-        <p key={idx} className="text-[11px] text-gray-300 leading-relaxed my-1.5">
-          {line}
-        </p>
-      );
-    });
-  };
-
-  // 선택된 문서의 연결 노드 추출
-  const getLinkedNodes = (doc: KnowledgeDoc) => {
-    // 마크다운 내에서 [[Link]] 들을 정규식으로 수집
-    const regex = /\[\[(.*?)\]\]/g;
-    const links: string[] = [];
-    let match;
-    while ((match = regex.exec(doc.content)) !== null) {
-      links.push(match[1]);
+    if (statusFilter !== 'all') {
+      queueQuery.eq('queue_status', statusFilter);
     }
-    return links;
-  };
 
-  const currentLinks = getLinkedNodes(selectedDoc);
+    const [queueResult, itemsResult, sourcesResult] = await Promise.all([
+      queueQuery,
+      supabase
+        .from('knowledge_items')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(50),
+      supabase
+        .from('knowledge_sources')
+        .select('id,source_type,title,publisher,summary,collected_at')
+        .order('collected_at', { ascending: false })
+        .limit(20),
+    ]);
 
-  // 분류 폴더별 파일 필터링
-  const getFilteredDocs = () => {
-    if (activeFolderFilter === 'all') return docs;
-    return docs.filter(d => d.category === activeFolderFilter);
-  };
+    setLoading(false);
 
-  const filteredDocs = getFilteredDocs();
+    const firstError = queueResult.error ?? itemsResult.error ?? sourcesResult.error;
+    if (firstError) {
+      setError(firstError.message.includes('does not exist')
+        ? '아직 Supabase에 지식화 테이블이 없어. docs/knowledge-db-mvp.md의 SQL을 먼저 적용해야 해.'
+        : firstError.message);
+      return;
+    }
+
+    const nextQueue = (queueResult.data ?? []) as unknown as ReviewQueueItem[];
+    const nextItems = (itemsResult.data ?? []) as KnowledgeItem[];
+    setReviewQueue(nextQueue);
+    setItems(nextItems);
+    setSources((sourcesResult.data ?? []) as SourceItem[]);
+    setSelectedItemId((current) => current ?? nextQueue[0]?.knowledge_items?.id ?? nextItems[0]?.id ?? null);
+  }
+
+  useEffect(() => {
+    void loadKnowledge();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
+
+  async function updateReview(queueId: string, nextStatus: ReviewStatus) {
+    if (!supabase) return;
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    const { error: updateError } = await supabase
+      .from('knowledge_review_queue')
+      .update({ queue_status: nextStatus, reviewed_at: new Date().toISOString() })
+      .eq('id', queueId);
+
+    setLoading(false);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setMessage(nextStatus === 'approved' ? '지식 카드가 승인됐어.' : nextStatus === 'rejected' ? '지식 카드가 반려됐어.' : '수정 필요로 표시했어.');
+    await loadKnowledge();
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-950/20 p-6 text-amber-100">
+        <h1 className="flex items-center gap-2 text-lg font-bold"><AlertCircle className="h-5 w-5" /> Supabase 연결 필요</h1>
+        <p className="mt-2 text-sm text-amber-200/80">`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`가 설정되어야 DB 지식화 화면을 사용할 수 있어.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      
-      {/* 1. Header Banner & Dynamic Integration Summary */}
-      <div className="bg-gray-900/60 p-6 rounded-2xl border border-gray-800 shadow-xl backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Database className="w-5 h-5 text-indigo-400" />
-            지식 영구 보관소 (Atomic Vault Viewer)
-          </h1>
-          <p className="text-xs text-gray-400 mt-1">
-            수집된 실시간 리서치 데이터와 뉴스레터 원본이 어떤 가공 절차를 거쳐 Obsidian Vault 최하단까지 연관 관계로 분류 저장되는지 구조를 투명하게 시각화합니다.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-gray-300 font-mono bg-gray-950/60 border border-gray-800 px-3.5 py-2 rounded-xl">
-          <BookOpen className="w-4 h-4 text-cyan-400" />
-          <span>Obsidian Vault: 5 Active Nodes</span>
-        </div>
-      </div>
-
-      {/* 2. Optimized Core Stats Panel (누적 통계 최소화 및 압축) */}
-      <div className="bg-gray-950/40 border border-gray-900 rounded-2xl p-4">
-        <div className="flex items-center justify-between border-b border-gray-900/60 pb-2 mb-3">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            지식 정제 파이프라인 누적 통계 (요약)
-          </span>
-          <span className="text-[9px] font-mono text-gray-500">Auto Sync Active</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          
-          {/* Stat 1: Newsletter */}
-          <div className="bg-gray-900/20 border border-gray-800/60 p-2.5 rounded-xl flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
-              <Folder className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <span className="text-[9px] text-gray-500 block">수집 뉴스레터</span>
-              <span className="text-xs font-bold text-blue-300 font-mono">{knowledge.newsletterCollected}건</span>
-            </div>
+      <div className="rounded-2xl border border-gray-800 bg-gray-900/60 p-6 shadow-xl backdrop-blur-md">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-bold text-white">
+              <Database className="h-5 w-5 text-cyan-400" />
+              지식 DB 콘솔
+            </h1>
+            <p className="mt-1 text-xs text-gray-400">
+              뉴스레터 지식화의 원장 저장소를 Obsidian이 아니라 Supabase DB로 전환합니다. Source→Report→Insight→Seed→Frame과 검토 대기열을 관리합니다.
+            </p>
           </div>
-
-          {/* Stat 2: Source Saved */}
-          <div className="bg-gray-900/20 border border-gray-800/60 p-2.5 rounded-xl flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
-              <FileCheck className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <span className="text-[9px] text-gray-500 block">백업 소스</span>
-              <span className="text-xs font-bold text-cyan-300 font-mono">{knowledge.sourceSaved}건</span>
-            </div>
-          </div>
-
-          {/* Stat 3: Report Created */}
-          <div className="bg-gray-900/20 border border-gray-800/60 p-2.5 rounded-xl flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400">
-              <BookOpen className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <span className="text-[9px] text-gray-500 block">분석 보고서</span>
-              <span className="text-xs font-bold text-purple-300 font-mono">{knowledge.reportCreated}건</span>
-            </div>
-          </div>
-
-          {/* Stat 4: Atomic Notes */}
-          <div className="bg-gray-900/20 border border-gray-800/60 p-2.5 rounded-xl flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-              <Hash className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <span className="text-[9px] text-gray-500 block">원자 노드 영구화</span>
-              <span className="text-xs font-bold text-emerald-300 font-mono">{knowledge.atomicNoteCreated}건</span>
-            </div>
-          </div>
-
-          {/* Stat 5: Today Saved */}
-          <div className="bg-gray-900/20 border border-gray-800/60 p-2.5 rounded-xl flex items-center gap-2 col-span-2 md:col-span-1">
-            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
-              <FileCheck className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <span className="text-[9px] text-gray-500 block">오늘의 보관 처리</span>
-              <span className="text-xs font-bold text-amber-300 font-mono">{knowledge.obsidianSavedToday}개</span>
-            </div>
-          </div>
-
+          <button
+            type="button"
+            onClick={loadKnowledge}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> DB 새로고침
+          </button>
         </div>
       </div>
 
-      {/* 3. Splitted View: Vault Directory Structure Map VS Markdown Live Previewer */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left Part (5 Cols): Storage Architecture & File Directory Tree */}
-        <div className="lg:col-span-5 bg-gray-950/40 border border-gray-800 p-5 rounded-2xl shadow-lg flex flex-col justify-between space-y-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-gray-900 pb-2">
-              <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-                <Compass className="w-4 h-4 text-indigo-400" />
-                Vault 아키텍처 분류 맵 (Directory Tree)
-              </span>
-              <button 
-                onClick={() => setActiveFolderFilter('all')}
-                className={`text-[9px] font-mono px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
-                  activeFolderFilter === 'all' 
-                    ? 'bg-indigo-950/40 text-indigo-300 border-indigo-900/80' 
-                    : 'bg-gray-900/20 text-gray-500 border-gray-800/60 hover:text-gray-300'
-                }`}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Stat icon={<FileText className="h-4 w-4" />} label="수집 Source" value={`${sources.length || knowledge.sourceSaved}건`} tone="cyan" />
+        <Stat icon={<BookOpen className="h-4 w-4" />} label="지식 카드" value={`${items.length}건`} tone="indigo" />
+        <Stat icon={<ShieldCheck className="h-4 w-4" />} label="검토 대기" value={`${reviewQueue.filter((row) => row.queue_status === 'pending').length || knowledge.needsReview}건`} tone="amber" />
+        <Stat icon={<CheckCircle2 className="h-4 w-4" />} label="승인/검토" value={`${items.filter((item) => ['approved', 'reviewed'].includes(item.review_status)).length}건`} tone="emerald" />
+        <Stat icon={<GitBranch className="h-4 w-4" />} label="저장 방식" value="DB 원장" tone="violet" />
+      </div>
+
+      {message && <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 text-xs text-emerald-200">{message}</div>}
+      {error && <div className="rounded-xl border border-red-500/20 bg-red-950/20 p-3 text-xs text-red-200">{error}</div>}
+
+      <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
+        <section className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-white">Review Queue</h2>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as 'all' | ReviewStatus)}
+              className="rounded-lg border border-gray-800 bg-gray-950 px-2 py-1 text-[11px] text-gray-300"
+            >
+              <option value="all">전체</option>
+              <option value="pending">검토 대기</option>
+              <option value="approved">승인</option>
+              <option value="rejected">반려</option>
+              <option value="needs_revision">수정 필요</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            {reviewQueue.length === 0 && (
+              <div className="rounded-xl border border-dashed border-gray-800 p-4 text-xs text-gray-500">
+                아직 검토 대기열이 비어 있어. SQL 적용 전이면 docs/knowledge-db-mvp.md를 먼저 실행해야 해.
+              </div>
+            )}
+            {reviewQueue.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => setSelectedItemId(row.knowledge_items?.id ?? row.item_id)}
+                className="w-full rounded-xl border border-gray-800 bg-gray-900/50 p-3 text-left hover:border-cyan-500/30 hover:bg-gray-900"
               >
-                전체보기
-              </button>
-            </div>
-
-            {/* Folder Trees (Mock Vault Structure) */}
-            <div className="space-y-1.5 font-mono text-[11px] text-gray-400 pl-1">
-              
-              {/* Root Directory */}
-              <div className="flex items-center gap-1 text-gray-300 font-semibold cursor-pointer" onClick={() => toggleFolder('root')}>
-                {expandedFolders.root ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                <Database className="w-3.5 h-3.5 text-gray-400" />
-                <span>Obsidian_Vault_Hermes/</span>
-              </div>
-
-              {expandedFolders.root && (
-                <div className="pl-4 space-y-2 pt-1">
-                  
-                  {/* Category 1: Inbox */}
-                  <div className="space-y-1">
-                    <div 
-                      onClick={() => { toggleFolder('inbox'); setActiveFolderFilter('newsletter'); }}
-                      className={`flex items-center justify-between hover:text-white p-1 rounded transition-colors cursor-pointer ${activeFolderFilter === 'newsletter' ? 'bg-indigo-950/20 text-indigo-300' : ''}`}
-                    >
-                      <div className="flex items-center gap-1">
-                        {expandedFolders.inbox ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        {expandedFolders.inbox ? <FolderOpen className="w-3.5 h-3.5 text-blue-400" /> : <Folder className="w-3.5 h-3.5 text-blue-400" />}
-                        <span>Inbox/</span>
-                        <span className="text-[9px] text-gray-600 font-normal">(수집 원본)</span>
-                      </div>
-                      <span className="text-[9px] font-mono text-gray-600 font-semibold bg-gray-900 px-1 py-0.1 rounded">1</span>
-                    </div>
-                    {expandedFolders.inbox && (
-                      <div className="pl-6 space-y-1">
-                        {docs.filter(d => d.category === 'newsletter').map(d => (
-                          <div 
-                            key={d.id} 
-                            onClick={() => setSelectedDocId(d.id)}
-                            className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer transition-colors hover:bg-gray-900/60 ${selectedDocId === d.id ? 'text-indigo-300 font-bold bg-indigo-950/30' : 'text-gray-500'}`}
-                          >
-                            <CornerDownRight className="w-3 h-3 text-gray-700" />
-                            <FileText className="w-3 h-3 text-blue-400/80" />
-                            <span className="truncate max-w-[180px]">{d.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Category 2: Sources */}
-                  <div className="space-y-1">
-                    <div 
-                      onClick={() => { toggleFolder('sources'); setActiveFolderFilter('source'); }}
-                      className={`flex items-center justify-between hover:text-white p-1 rounded transition-colors cursor-pointer ${activeFolderFilter === 'source' ? 'bg-indigo-950/20 text-indigo-300' : ''}`}
-                    >
-                      <div className="flex items-center gap-1">
-                        {expandedFolders.sources ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        {expandedFolders.sources ? <FolderOpen className="w-3.5 h-3.5 text-cyan-400" /> : <Folder className="w-3.5 h-3.5 text-cyan-400" />}
-                        <span>Sources/</span>
-                        <span className="text-[9px] text-gray-600 font-normal">(백업 소스)</span>
-                      </div>
-                      <span className="text-[9px] font-mono text-gray-600 font-semibold bg-gray-900 px-1 py-0.1 rounded">1</span>
-                    </div>
-                    {expandedFolders.sources && (
-                      <div className="pl-6 space-y-1">
-                        {docs.filter(d => d.category === 'source').map(d => (
-                          <div 
-                            key={d.id} 
-                            onClick={() => setSelectedDocId(d.id)}
-                            className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer transition-colors hover:bg-gray-900/60 ${selectedDocId === d.id ? 'text-indigo-300 font-bold bg-indigo-950/30' : 'text-gray-500'}`}
-                          >
-                            <CornerDownRight className="w-3 h-3 text-gray-700" />
-                            <FileText className="w-3 h-3 text-cyan-400/80" />
-                            <span className="truncate max-w-[180px]">{d.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Category 3: Research / Reports */}
-                  <div className="space-y-1">
-                    <div 
-                      onClick={() => { toggleFolder('research'); setActiveFolderFilter('report'); }}
-                      className={`flex items-center justify-between hover:text-white p-1 rounded transition-colors cursor-pointer ${activeFolderFilter === 'report' ? 'bg-indigo-950/20 text-indigo-300' : ''}`}
-                    >
-                      <div className="flex items-center gap-1">
-                        {expandedFolders.research ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        {expandedFolders.research ? <FolderOpen className="w-3.5 h-3.5 text-purple-400" /> : <Folder className="w-3.5 h-3.5 text-purple-400" />}
-                        <span>Research/</span>
-                        <span className="text-[9px] text-gray-600 font-normal">(분석 리포트)</span>
-                      </div>
-                      <span className="text-[9px] font-mono text-gray-600 font-semibold bg-gray-900 px-1 py-0.1 rounded">1</span>
-                    </div>
-                    {expandedFolders.research && (
-                      <div className="pl-6 space-y-1">
-                        {docs.filter(d => d.category === 'report').map(d => (
-                          <div 
-                            key={d.id} 
-                            onClick={() => setSelectedDocId(d.id)}
-                            className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer transition-colors hover:bg-gray-900/60 ${selectedDocId === d.id ? 'text-indigo-300 font-bold bg-indigo-950/30' : 'text-gray-500'}`}
-                          >
-                            <CornerDownRight className="w-3 h-3 text-gray-700" />
-                            <FileText className="w-3 h-3 text-purple-400/80" />
-                            <span className="truncate max-w-[180px]">{d.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Category 4: Vault/Atomic/ */}
-                  <div className="space-y-1">
-                    <div 
-                      onClick={() => { toggleFolder('atomic'); setActiveFolderFilter('atomic'); }}
-                      className={`flex items-center justify-between hover:text-white p-1 rounded transition-colors cursor-pointer ${activeFolderFilter === 'atomic' ? 'bg-indigo-950/20 text-indigo-300' : ''}`}
-                    >
-                      <div className="flex items-center gap-1">
-                        {expandedFolders.atomic ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        {expandedFolders.atomic ? <FolderOpen className="w-3.5 h-3.5 text-emerald-400" /> : <Folder className="w-3.5 h-3.5 text-emerald-400" />}
-                        <span>Vault/Atomic/</span>
-                        <span className="text-[9px] text-gray-600 font-normal">(영구 노드)</span>
-                      </div>
-                      <span className="text-[9px] font-mono text-gray-600 font-semibold bg-gray-900 px-1 py-0.1 rounded">2</span>
-                    </div>
-                    {expandedFolders.atomic && (
-                      <div className="pl-6 space-y-1">
-                        {docs.filter(d => d.category === 'atomic').map(d => (
-                          <div 
-                            key={d.id} 
-                            onClick={() => setSelectedDocId(d.id)}
-                            className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer transition-colors hover:bg-gray-900/60 ${selectedDocId === d.id ? 'text-indigo-300 font-bold bg-indigo-950/30' : 'text-gray-500'}`}
-                          >
-                            <CornerDownRight className="w-3 h-3 text-gray-700" />
-                            <FileText className="w-3 h-3 text-emerald-400/80" />
-                            <span className="truncate max-w-[180px]">{d.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase text-cyan-400">{row.priority}</span>
+                  <span className="rounded-full bg-gray-950 px-2 py-0.5 text-[10px] text-gray-400">{statusLabel[row.queue_status] ?? row.queue_status}</span>
                 </div>
-              )}
+                <p className="mt-2 line-clamp-2 text-xs font-semibold text-gray-100">{row.knowledge_items?.title ?? row.item_id}</p>
+                <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{row.knowledge_items?.one_line_summary ?? row.notes ?? '요약 없음'}</p>
+              </button>
+            ))}
+          </div>
+        </section>
 
+        <section className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <h2 className="text-sm font-bold text-white">Knowledge Cards</h2>
+            <div className="flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-950 px-3 py-2">
+              <Search className="h-4 w-4 text-gray-500" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="키워드, 타깃, RFP 위치 검색"
+                className="w-56 bg-transparent text-xs text-gray-200 outline-none placeholder:text-gray-600"
+              />
             </div>
           </div>
 
-          {/* Dynamic Link Graph Summary */}
-          <div className="bg-gray-900/30 border border-gray-900/80 p-4 rounded-xl space-y-2 mt-4 font-mono text-[10px]">
-            <div className="text-gray-400 font-semibold uppercase flex items-center gap-1 pb-1 border-b border-gray-900">
-              <Link2 className="w-3.5 h-3.5 text-indigo-400" />
-              <span>현재 노드의 양방향 링크 맵 구조</span>
-            </div>
-            <div className="space-y-1 text-gray-500">
-              <div><span className="text-white">Active Document</span>: {selectedDoc.name}</div>
-              <div><span className="text-white">Path</span>: {selectedDoc.path}</div>
-              <div>
-                <span className="text-white">Outgoing Connections ({currentLinks.length})</span>:
-                {currentLinks.length === 0 ? (
-                  <span className="text-gray-600 italic ml-1">없음</span>
-                ) : (
-                  <div className="flex flex-wrap gap-1 mt-1 pl-1">
-                    {currentLinks.map(link => (
-                      <span key={link} className="px-1.5 py-0.5 bg-indigo-950/40 border border-indigo-900 text-indigo-300 rounded font-semibold text-[9px]">
-                        [[{link}]]
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Part (7 Cols): Custom Markdown Live Previewer */}
-        <div className="lg:col-span-7 flex flex-col bg-gray-950/60 border border-gray-800 rounded-2xl shadow-xl overflow-hidden min-h-[550px]">
-          
-          {/* Preview Panel Title Bar */}
-          <div className="bg-gray-900/60 border-b border-gray-800 px-5 py-3.5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4.5 h-4.5 text-indigo-400" />
-              <div>
-                <span className="text-xs font-bold text-gray-200 block font-mono">{selectedDoc.name}</span>
-                <span className="text-[9px] text-gray-500 block font-mono">{selectedDoc.path}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-gray-500 font-mono bg-gray-950 border border-gray-900 px-2 py-0.5 rounded">
-                {selectedDoc.size}
-              </span>
-              <span className="text-[10px] text-indigo-400 font-mono bg-indigo-950/30 border border-indigo-950 px-2 py-0.5 rounded">
-                {selectedDoc.date}
-              </span>
-            </div>
-          </div>
-
-          {/* Preview Panel Body */}
-          <div className="p-6 flex-1 overflow-y-auto space-y-4 max-h-[480px]">
-            {/* Tags Ribbon */}
-            <div className="flex flex-wrap items-center gap-1.5 mb-2 pb-3 border-b border-gray-900/40">
-              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">해시태그:</span>
-              {selectedDoc.tags.map(tag => (
-                <span 
-                  key={tag} 
-                  className="px-2 py-0.5 bg-gray-900 border border-gray-800 text-[10px] font-mono text-indigo-300 rounded-md"
+          <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+            <div className="max-h-[540px] space-y-2 overflow-y-auto pr-1">
+              {filteredItems.length === 0 && <p className="text-xs text-gray-500">검색 결과가 없어.</p>}
+              {filteredItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedItemId(item.id)}
+                  className={`w-full rounded-xl border p-3 text-left transition ${selectedItem?.id === item.id ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-gray-800 bg-gray-900/40 hover:border-gray-700'}`}
                 >
-                  {tag}
-                </span>
+                  <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                    <span className="font-bold uppercase text-indigo-300">{item.item_type}</span>
+                    <span>·</span>
+                    <span>{statusLabel[item.review_status] ?? item.review_status}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs font-bold text-gray-100">{item.title}</p>
+                  <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{item.one_line_summary}</p>
+                </button>
               ))}
             </div>
 
-            {/* Custom Markdown Parser Output Container */}
-            <div className="markdown-body space-y-3 font-mono text-gray-200 selection:bg-indigo-500/30 leading-relaxed text-xs">
-              {renderMarkdown(selectedDoc.content)}
+            <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
+              {selectedItem ? (
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex flex-wrap gap-2 text-[10px]">
+                      <Badge>{selectedItem.item_type}</Badge>
+                      <Badge>{statusLabel[selectedItem.review_status] ?? selectedItem.review_status}</Badge>
+                      <Badge>{evidenceLabel[selectedItem.evidence_level] ?? selectedItem.evidence_level}</Badge>
+                      <Badge>재사용 {selectedItem.reuse_grade}</Badge>
+                    </div>
+                    <h3 className="mt-3 text-lg font-bold text-white">{selectedItem.title}</h3>
+                    <p className="mt-2 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 text-sm leading-relaxed text-indigo-100">{selectedItem.one_line_summary}</p>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <InfoBox label="카테고리" value={selectedItem.category ?? '미지정'} />
+                    <InfoBox label="타깃" value={selectedItem.target_audience ?? '미지정'} />
+                    <InfoBox label="RFP 활용" value={selectedItem.rfp_use} />
+                  </div>
+
+                  <div>
+                    <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">본문/활용 메모</h4>
+                    <p className="whitespace-pre-wrap rounded-xl border border-gray-800 bg-gray-950/60 p-4 text-xs leading-relaxed text-gray-300">
+                      {selectedItem.body || '본문이 아직 없어. 자동 생성 후보를 승인하기 전에 근거와 사용 맥락을 채워야 해.'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gray-500"><Tags className="h-3.5 w-3.5" /> 리스크 플래그</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {(selectedItem.risk_flags?.length ? selectedItem.risk_flags : ['none']).map((flag) => <Badge key={flag}>{flag}</Badge>)}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 border-t border-gray-800 pt-4">
+                    {reviewQueue.filter((row) => row.item_id === selectedItem.id).map((row) => (
+                      <React.Fragment key={row.id}>
+                        <button
+                          type="button"
+                          onClick={() => updateReview(row.id, 'approved')}
+                          disabled={loading}
+                          className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-4 w-4" /> 승인
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateReview(row.id, 'needs_revision')}
+                          disabled={loading}
+                          className="inline-flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                        >
+                          <AlertCircle className="h-4 w-4" /> 수정 필요
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateReview(row.id, 'rejected')}
+                          disabled={loading}
+                          className="inline-flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-2 text-xs font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                        >
+                          <XCircle className="h-4 w-4" /> 반려
+                        </button>
+                      </React.Fragment>
+                    ))}
+                    {!reviewQueue.some((row) => row.item_id === selectedItem.id) && (
+                      <span className="text-xs text-gray-500">이 카드는 현재 검토 대기열에 없어.</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-800 p-8 text-center text-sm text-gray-500">
+                  지식 카드를 선택해줘.
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Action Footer (Mock Export options) */}
-          <div className="bg-gray-950 border-t border-gray-900 px-5 py-3 flex items-center justify-between text-[11px] text-gray-500">
-            <span className="flex items-center gap-1">
-              <Terminal className="w-3.5 h-3.5 text-gray-600" />
-              <span>Vault 저장 위치: Local Client Workspace</span>
-            </span>
-            <div className="flex items-center gap-3">
-              <button className="hover:text-white transition-colors cursor-pointer flex items-center gap-1">
-                <Share2 className="w-3.5 h-3.5" />
-                공유하기
-              </button>
-              <button className="hover:text-white transition-colors cursor-pointer flex items-center gap-1">
-                <Download className="w-3.5 h-3.5" />
-                내보내기 (.md)
-              </button>
-            </div>
-          </div>
-
-        </div>
-
+        </section>
       </div>
+    </div>
+  );
+}
 
+function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: string }) {
+  return (
+    <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+      <div className={`mb-2 inline-flex rounded-xl bg-${tone}-500/10 p-2 text-${tone}-300`}>
+        {icon}
+      </div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-white">{value}</p>
+    </div>
+  );
+}
+
+function Badge({ children }: { children: React.ReactNode; key?: React.Key }) {
+  return <span className="rounded-full border border-gray-700 bg-gray-950 px-2.5 py-1 text-[10px] font-bold text-gray-300">{children}</span>;
+}
+
+function InfoBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-xs font-semibold text-gray-200">{value}</p>
     </div>
   );
 }

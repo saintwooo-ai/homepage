@@ -22,7 +22,9 @@ import {
   X,
   Clock,
   Play,
-  Layers
+  Layers,
+  Users,
+  UserRound
 } from 'lucide-react';
 import { Task, Profile, KnowledgePipeline, EventLog, DashboardStats, TaskStatus, EventLevel } from './types';
 import { 
@@ -39,10 +41,14 @@ import KanbanView from './components/KanbanView';
 import ProfilesView from './components/ProfilesView';
 import KnowledgeView from './components/KnowledgeView';
 import EventsView from './components/EventsView';
+import MembersView from './components/MembersView';
+import AccountView from './components/AccountView';
+import { useAuth } from './auth/AuthContext';
 
 export default function App() {
   // Navigation & UI State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'kanban' | 'profiles' | 'knowledge' | 'events'>('dashboard');
+  const { isAdmin } = useAuth();
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'kanban' | 'profiles' | 'knowledge' | 'events' | 'members' | 'account'>('dashboard');
   const [darkMode, setDarkMode] = useState<boolean>(true); // Default dark mode as recommended
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
@@ -606,6 +612,32 @@ export default function App() {
                 <Terminal className="w-4 h-4" />
                 실시간 이벤트 로그
               </button>
+
+              <button
+                onClick={() => { setActiveTab('account'); setIsSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
+                  activeTab === 'account'
+                    ? (darkMode ? 'bg-indigo-500/10 text-cyan-400 border border-indigo-500/20' : 'bg-indigo-500/5 text-indigo-600 border border-indigo-500/15')
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/10'
+                }`}
+              >
+                <UserRound className="w-4 h-4" />
+                내 계정
+              </button>
+
+              {isAdmin && (
+                <button
+                  onClick={() => { setActiveTab('members'); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
+                    activeTab === 'members'
+                      ? (darkMode ? 'bg-indigo-500/10 text-cyan-400 border border-indigo-500/20' : 'bg-indigo-500/5 text-indigo-600 border border-indigo-500/15')
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/10'
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  회원관리
+                </button>
+              )}
             </nav>
 
           </div>
@@ -692,6 +724,14 @@ export default function App() {
               events={events} 
               onClearEvents={handleClearEvents}
             />
+          )}
+
+          {activeTab === 'account' && (
+            <AccountView />
+          )}
+
+          {activeTab === 'members' && isAdmin && (
+            <MembersView />
           )}
         </main>
 

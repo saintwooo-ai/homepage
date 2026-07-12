@@ -1,9 +1,9 @@
 import React, { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { LogOut, ShieldCheck } from 'lucide-react';
+import { AuthProvider } from '../auth/AuthContext';
+import { emailToUsername, parseAdminUsernames, usernameToEmail } from '../auth/identity';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-
-type AuthMode = 'signin' | 'signup';
 
 type AuthGateProps = {
   children: ReactNode;
@@ -12,13 +12,14 @@ type AuthGateProps = {
 export default function AuthGate({ children }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
-  const [mode, setMode] = useState<AuthMode>('signin');
-  const [email, setEmail] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  const title = useMemo(() => (mode === 'signin' ? '로그인' : '회원가입'), [mode]);
+  const adminUsernames = useMemo(() => parseAdminUsernames(import.meta.env.VITE_ADMIN_USERNAMES), []);
+  const username = emailToUsername(session?.user.email);
+  const isAdmin = Boolean(username && adminUsernames.includes(username));
 
   useEffect(() => {
     if (!supabase) {
@@ -49,37 +50,26 @@ export default function AuthGate({ children }: AuthGateProps) {
     event.preventDefault();
     if (!supabase || isSubmitting) return;
 
+    const email = usernameToEmail(usernameInput);
     setIsSubmitting(true);
     setMessage(null);
 
-    const credentials = { email: email.trim(), password };
-    const result = mode === 'signin'
-      ? await supabase.auth.signInWithPassword(credentials)
-      : await supabase.auth.signUp(credentials);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     setIsSubmitting(false);
 
-    if (result.error) {
-      setMessage({ type: 'error', text: result.error.message });
+    if (error) {
+      setMessage({ type: 'error', text: '아이디 또는 비밀번호가 맞지 않아.' });
       return;
     }
 
-    if (mode === 'signup' && !result.data.session) {
-      setMessage({
-        type: 'success',
-        text: '회원가입 요청이 완료됐어. Supabase 이메일 인증 설정이 켜져 있으면 메일 확인 후 로그인해야 해.',
-      });
-      setMode('signin');
-      return;
-    }
-
-    setMessage({ type: 'success', text: '인증 완료. 대시보드로 이동할게.' });
+    setMessage({ type: 'success', text: '로그인 완료. 내부 콘솔로 이동할게.' });
   }
 
   async function handleSignOut() {
     if (!supabase) return;
     await supabase.auth.signOut();
-    setEmail('');
+    setUsernameInput('');
     setPassword('');
     setMessage({ type: 'info', text: '로그아웃됐어.' });
   }
@@ -91,8 +81,9 @@ export default function AuthGate({ children }: AuthGateProps) {
           <p className="text-xs font-mono text-amber-300 mb-3">SUPABASE CONFIG REQUIRED</p>
           <h1 className="text-2xl font-bold mb-3">로그인 설정이 아직 연결되지 않았어</h1>
           <p className="text-sm text-gray-400 leading-6">
-            Vercel 환경변수에 <code className="text-cyan-300">VITE_SUPABASE_URL</code>과{' '}
-            <code className="text-cyan-300">VITE_SUPABASE_ANON_KEY</code>를 넣으면 로그인 화면이 활성화돼.
+            Vercel 환경변수에 <code className="text-cyan-300">VITE_SUPABASE_URL</code>,{' '}
+            <code className="text-cyan-300">VITE_SUPABASE_ANON_KEY</code>,{' '}
+            <code className="text-cyan-300">VITE_ADMIN_USERNAMES</code>를 넣으면 로그인 화면이 활성화돼.
           </p>
         </div>
       </div>
@@ -118,34 +109,34 @@ export default function AuthGate({ children }: AuthGateProps) {
             </div>
             <div>
               <p className="text-[10px] font-mono tracking-[0.35em] text-cyan-300">UGNAS AI</p>
-              <h1 className="text-xl font-extrabold tracking-tight">Operator Console {title}</h1>
+              <h1 className="text-xl font-extrabold tracking-tight">내부 로그인</h1>
             </div>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block space-y-2">
-              <span className="text-xs font-semibold text-gray-400">Email</span>
+              <span className="text-xs font-semibold text-gray-400">아이디</span>
               <input
                 className="w-full rounded-2xl border border-gray-800 bg-gray-950/80 px-4 py-3 text-sm text-gray-100 outline-none transition focus:border-cyan-400"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
+                type="text"
+                autoComplete="username"
+                value={usernameInput}
+                onChange={(event) => setUsernameInput(event.target.value)}
+                placeholder="admin"
                 required
               />
             </label>
 
             <label className="block space-y-2">
-              <span className="text-xs font-semibold text-gray-400">Password</span>
+              <span className="text-xs font-semibold text-gray-400">비밀번호</span>
               <input
                 className="w-full rounded-2xl border border-gray-800 bg-gray-950/80 px-4 py-3 text-sm text-gray-100 outline-none transition focus:border-cyan-400"
                 type="password"
-                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="6자 이상"
-                minLength={6}
+                placeholder="비밀번호"
+                minLength={4}
                 required
               />
             </label>
@@ -167,29 +158,23 @@ export default function AuthGate({ children }: AuthGateProps) {
               disabled={isSubmitting}
               className="w-full rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-bold text-gray-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? '처리 중...' : title}
+              {isSubmitting ? '처리 중...' : '로그인'}
             </button>
           </form>
 
-          <button
-            type="button"
-            className="mt-5 w-full text-center text-xs text-gray-400 transition hover:text-cyan-300"
-            onClick={() => {
-              setMode(mode === 'signin' ? 'signup' : 'signin');
-              setMessage(null);
-            }}
-          >
-            {mode === 'signin' ? '계정이 없으면 회원가입' : '이미 계정이 있으면 로그인'}
-          </button>
+          <p className="mt-5 text-center text-xs leading-5 text-gray-500">
+            공개 회원가입은 막혀 있어. 계정 추가/삭제는 관리자 로그인 후 회원관리 메뉴에서 처리해.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <>
+    <AuthProvider value={{ session, username, isAdmin, adminUsernames }}>
       <div className="fixed right-4 top-12 z-50 flex items-center gap-2 rounded-full border border-gray-800 bg-gray-950/80 px-3 py-2 text-[11px] text-gray-300 shadow-lg shadow-black/20 backdrop-blur">
-        <span className="hidden sm:inline max-w-[180px] truncate">{session.user.email}</span>
+        <span className="hidden sm:inline max-w-[180px] truncate">{username}</span>
+        {isAdmin && <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 font-bold text-cyan-300">ADMIN</span>}
         <button
           type="button"
           onClick={handleSignOut}
@@ -200,6 +185,6 @@ export default function AuthGate({ children }: AuthGateProps) {
         </button>
       </div>
       {children}
-    </>
+    </AuthProvider>
   );
 }
