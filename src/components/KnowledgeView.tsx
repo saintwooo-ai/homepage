@@ -39,10 +39,24 @@ type SourceItem = {
   title: string;
   publisher: string | null;
   url: string | null;
-  raw_text: string | null;
   summary: string | null;
+  raw_text: string | null;
   collected_at: string;
 };
+
+type ConnectionState = 'checking' | 'connected_empty' | 'connected_with_data' | 'auth_or_rls_error' | 'schema_error' | 'unknown_error';
+
+const connectedTables = ['knowledge_sources', 'knowledge_items', 'knowledge_review_queue'];
+const pendingTables = [
+  'knowledge_evidence_items',
+  'knowledge_tags',
+  'knowledge_item_tags',
+  'knowledge_links',
+  'knowledge_collections',
+  'knowledge_collection_items',
+  'knowledge_ai_runs',
+  'knowledge_approved_search',
+];
 
 interface KnowledgeViewProps {
   knowledge: KnowledgePipeline;
@@ -89,6 +103,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
   const [sourcePublisherFilter, setSourcePublisherFilter] = useState('all');
   const [sourceSort, setSourceSort] = useState<'newest' | 'oldest' | 'title'>('newest');
+  const [connectionState, setConnectionState] = useState<ConnectionState>('checking');
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedItemId) ?? reviewQueue.find((row) => row.knowledge_items?.id === selectedItemId)?.knowledge_items ?? null,
@@ -142,6 +157,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   async function loadKnowledge() {
     if (!supabase) return;
     setLoading(true);
+    setConnectionState('checking');
     setError(null);
     setMessage(null);
 
@@ -173,17 +189,27 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
 
     const firstError = queueResult.error ?? itemsResult.error ?? sourcesResult.error;
     if (firstError) {
-      setError(firstError.message.includes('does not exist')
+      const lowerMessage = firstError.message.toLowerCase();
+      const nextConnectionState = lowerMessage.includes('does not exist')
+        ? 'schema_error'
+        : lowerMessage.includes('permission denied') || lowerMessage.includes('jwt') || lowerMessage.includes('row-level security')
+          ? 'auth_or_rls_error'
+          : 'unknown_error';
+      setConnectionState(nextConnectionState);
+      setError(nextConnectionState === 'schema_error'
         ? '아직 Supabase에 지식화 테이블이 없어. docs/knowledge-db-mvp.md의 SQL을 먼저 적용해야 해.'
-        : firstError.message);
+        : nextConnectionState === 'auth_or_rls_error'
+          ? 'DB는 응답했지만 권한에서 막혔어. 로그인 세션 또는 Supabase RLS 정책을 확인해야 해.'
+          : firstError.message);
       return;
     }
 
     const nextQueue = (queueResult.data ?? []) as unknown as ReviewQueueItem[];
     const nextItems = (itemsResult.data ?? []) as KnowledgeItem[];
+    const nextSources = (sourcesResult.data ?? []) as SourceItem[];
+    setConnectionState(nextQueue.length + nextItems.length + nextSources.length === 0 ? 'connected_empty' : 'connected_with_data');
     setReviewQueue(nextQueue);
     setItems(nextItems);
-    const nextSources = (sourcesResult.data ?? []) as SourceItem[];
     setSources(nextSources);
     setSelectedItemId((current) => current ?? nextQueue[0]?.knowledge_items?.id ?? nextItems[0]?.id ?? null);
     setSelectedSourceId((current) => current ?? nextSources[0]?.id ?? null);
@@ -286,6 +312,15 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
           </button>
         </div>
       </div>
+
+      <ConnectionAuditPanel
+        state={connectionState}
+        connectedTables={connectedTables}
+        pendingTables={pendingTables}
+        sourcesCount={sources.length}
+        itemsCount={items.length}
+        reviewQueueCount={reviewQueue.length}
+      />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat icon={<FileText className="h-4 w-4" />} label="수집 Source" value={`${sources.length}건`} tone="cyan" />
@@ -627,6 +662,88 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
         </section>
       </div>
     </div>
+  );
+}
+
+function ConnectionAuditPanel({
+  state,
+  connectedTables,
+  pendingTables,
+  sourcesCount,
+  itemsCount,
+  reviewQueueCount,
+}: {
+  state: ConnectionState;
+  connectedTables: string[];
+  pendingTables: string[];
+  sourcesCount: number;
+  itemsCount: number;
+  reviewQueueCount: number;
+}) {
+  const totalRows = sourcesCount + itemsCount + reviewQueueCount;
+  const stateCopy: Record<ConnectionState, { label: string; tone: string; description: string }> = {
+    checking: {
+      label: '연결 확인 중',
+      tone: 'border-cyan-500/20 bg-cyan-950/20 text-cyan-100',
+      description: 'Supabase에서 지식 테이블 3개의 읽기 상태를 확인하고 있어.',
+    },
+    connected_empty: {
+      label: 'DB 연결됨 · 데이터 0건',
+      tone: 'border-amber-500/20 bg-amber-950/20 text-amber-100',
+      description: '권한/스키마 오류는 아니고, 현재 연결된 지식 테이블에 표시할 row가 없는 상태야.',
+    },
+    connected_with_data: {
+      label: 'DB 연결됨 · 데이터 표시 가능',
+      tone: 'border-emerald-500/20 bg-emerald-950/20 text-emerald-100',
+      description: 'Supabase 조회가 성공했고 실제 row가 화면에 반영되고 있어.',
+    },
+    auth_or_rls_error: {
+      label: '권한 확인 필요',
+      tone: 'border-red-500/20 bg-red-950/20 text-red-100',
+      description: '테이블은 있지만 로그인 세션, JWT, 또는 RLS 정책 때문에 조회가 막힌 상태야.',
+    },
+    schema_error: {
+      label: '스키마 확인 필요',
+      tone: 'border-red-500/20 bg-red-950/20 text-red-100',
+      description: '프론트가 기대하는 지식 테이블/컬럼이 Supabase에 없거나 이름이 다른 상태야.',
+    },
+    unknown_error: {
+      label: '알 수 없는 연결 오류',
+      tone: 'border-red-500/20 bg-red-950/20 text-red-100',
+      description: 'Supabase 요청이 실패했어. 아래 오류 메시지를 기준으로 추가 확인이 필요해.',
+    },
+  };
+  const current = stateCopy[state];
+
+  return (
+    <section className={`rounded-2xl border p-4 ${current.tone}`}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <ShieldCheck className="h-4 w-4" />
+            {current.label}
+          </div>
+          <p className="mt-1 text-xs opacity-80">{current.description}</p>
+          <p className="mt-2 text-[11px] opacity-70">
+            현재 화면은 연결된 3개 테이블 합계 {totalRows}건을 기준으로 표시해. 데이터 0건은 연결 실패가 아니라 빈 DB 상태로 구분해.
+          </p>
+        </div>
+        <div className="grid gap-3 text-[11px] md:grid-cols-2 lg:w-[560px]">
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <p className="mb-2 font-bold text-white/90">현재 화면 연결</p>
+            <div className="flex flex-wrap gap-1.5">
+              {connectedTables.map((table) => <Badge key={table}>{table}</Badge>)}
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <p className="mb-2 font-bold text-white/90">아직 화면 미연결</p>
+            <div className="flex flex-wrap gap-1.5">
+              {pendingTables.map((table) => <Badge key={table}>{table}</Badge>)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
