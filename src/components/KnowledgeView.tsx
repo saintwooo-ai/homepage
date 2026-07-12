@@ -71,6 +71,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
   const [loading, setLoading] = useState(false);
@@ -78,8 +79,13 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [error, setError] = useState<string | null>(null);
 
   const selectedItem = useMemo(
-    () => items.find((item) => item.id === selectedItemId) ?? reviewQueue.find((row) => row.knowledge_items?.id === selectedItemId)?.knowledge_items ?? items[0] ?? null,
+    () => items.find((item) => item.id === selectedItemId) ?? reviewQueue.find((row) => row.knowledge_items?.id === selectedItemId)?.knowledge_items ?? null,
     [items, reviewQueue, selectedItemId]
+  );
+
+  const selectedSource = useMemo(
+    () => sources.find((source) => source.id === selectedSourceId) ?? sources[0] ?? null,
+    [sources, selectedSourceId]
   );
 
   const filteredItems = useMemo(() => {
@@ -117,7 +123,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
         .limit(50),
       supabase
         .from('knowledge_sources')
-        .select('id,source_type,title,publisher,summary,collected_at')
+        .select('id,source_type,title,publisher,summary,raw_text,collected_at')
         .order('collected_at', { ascending: false })
         .limit(20),
     ]);
@@ -136,8 +142,10 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     const nextItems = (itemsResult.data ?? []) as KnowledgeItem[];
     setReviewQueue(nextQueue);
     setItems(nextItems);
-    setSources((sourcesResult.data ?? []) as SourceItem[]);
+    const nextSources = (sourcesResult.data ?? []) as SourceItem[];
+    setSources(nextSources);
     setSelectedItemId((current) => current ?? nextQueue[0]?.knowledge_items?.id ?? nextItems[0]?.id ?? null);
+    setSelectedSourceId((current) => current ?? nextSources[0]?.id ?? null);
   }
 
   useEffect(() => {
@@ -198,15 +206,69 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Stat icon={<FileText className="h-4 w-4" />} label="수집 Source" value={`${sources.length || knowledge.sourceSaved}건`} tone="cyan" />
+        <Stat icon={<FileText className="h-4 w-4" />} label="수집 Source" value={`${sources.length}건`} tone="cyan" />
         <Stat icon={<BookOpen className="h-4 w-4" />} label="지식 카드" value={`${items.length}건`} tone="indigo" />
-        <Stat icon={<ShieldCheck className="h-4 w-4" />} label="검토 대기" value={`${reviewQueue.filter((row) => row.queue_status === 'pending').length || knowledge.needsReview}건`} tone="amber" />
+        <Stat icon={<ShieldCheck className="h-4 w-4" />} label="검토 대기" value={`${reviewQueue.filter((row) => row.queue_status === 'pending').length}건`} tone="amber" />
         <Stat icon={<CheckCircle2 className="h-4 w-4" />} label="승인/검토" value={`${items.filter((item) => ['approved', 'reviewed'].includes(item.review_status)).length}건`} tone="emerald" />
         <Stat icon={<GitBranch className="h-4 w-4" />} label="저장 방식" value="DB 원장" tone="violet" />
       </div>
 
       {message && <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 text-xs text-emerald-200">{message}</div>}
       {error && <div className="rounded-xl border border-red-500/20 bg-red-950/20 p-3 text-xs text-red-200">{error}</div>}
+
+
+      <section className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-white">수집 Source</h2>
+            <p className="mt-1 text-[11px] text-gray-500">실제 Supabase knowledge_sources 테이블의 자료만 표시합니다.</p>
+          </div>
+          <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-[11px] font-bold text-cyan-200">{sources.length}건</span>
+        </div>
+        {sources.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-800 p-5 text-xs leading-relaxed text-gray-500">
+            아직 저장된 Source가 없어. 그래서 클릭해도 열릴 데이터가 없던 상태야. 다음 단계에서 “Source 입력/저장” 기능을 붙이면 여기에 목록이 표시돼.
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+            <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+              {sources.map((source) => (
+                <button
+                  key={source.id}
+                  type="button"
+                  onClick={() => setSelectedSourceId(source.id)}
+                  className={`w-full rounded-xl border p-3 text-left transition ${selectedSource?.id === source.id ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-gray-800 bg-gray-900/40 hover:border-gray-700'}`}
+                >
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                    <span className="font-bold uppercase text-cyan-300">{source.source_type}</span>
+                    <span>{new Date(source.collected_at).toLocaleDateString('ko-KR')}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs font-bold text-gray-100">{source.title}</p>
+                  <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{source.summary ?? source.raw_text ?? '요약 없음'}</p>
+                </button>
+              ))}
+            </div>
+            <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
+              {selectedSource ? (
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex flex-wrap gap-2 text-[10px]"><Badge>{selectedSource.source_type}</Badge><Badge>{selectedSource.publisher ?? '발행처 미지정'}</Badge></div>
+                    <h3 className="mt-3 text-lg font-bold text-white">{selectedSource.title}</h3>
+                  </div>
+                  <div>
+                    <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">요약</h4>
+                    <p className="rounded-xl border border-gray-800 bg-gray-950/60 p-4 text-xs leading-relaxed text-gray-300">{selectedSource.summary || '요약이 아직 없어.'}</p>
+                  </div>
+                  <div>
+                    <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">원문/수집 텍스트</h4>
+                    <p className="whitespace-pre-wrap rounded-xl border border-gray-800 bg-gray-950/60 p-4 text-xs leading-relaxed text-gray-300">{selectedSource.raw_text || '원문 텍스트가 아직 없어.'}</p>
+                  </div>
+                </div>
+              ) : <div className="text-xs text-gray-500">Source를 선택해줘.</div>}
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
         <section className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
@@ -228,7 +290,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
           <div className="space-y-2">
             {reviewQueue.length === 0 && (
               <div className="rounded-xl border border-dashed border-gray-800 p-4 text-xs text-gray-500">
-                아직 검토 대기열이 비어 있어. SQL 적용 전이면 docs/knowledge-db-mvp.md를 먼저 실행해야 해.
+                검토 대기열이 비어 있어. 아직 AI 후보 지식 카드가 생성되지 않았다는 뜻이야.
               </div>
             )}
             {reviewQueue.map((row) => (
