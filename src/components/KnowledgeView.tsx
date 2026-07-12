@@ -84,6 +84,11 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [sourcePublisher, setSourcePublisher] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [sourceRawText, setSourceRawText] = useState('');
+  const [showSourceForm, setShowSourceForm] = useState(false);
+  const [sourceQuery, setSourceQuery] = useState('');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
+  const [sourcePublisherFilter, setSourcePublisherFilter] = useState('all');
+  const [sourceSort, setSourceSort] = useState<'newest' | 'oldest' | 'title'>('newest');
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedItemId) ?? reviewQueue.find((row) => row.knowledge_items?.id === selectedItemId)?.knowledge_items ?? null,
@@ -94,6 +99,35 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     () => sources.find((source) => source.id === selectedSourceId) ?? sources[0] ?? null,
     [sources, selectedSourceId]
   );
+
+  const sourceTypes = useMemo(
+    () => Array.from(new Set(sources.map((source) => source.source_type).filter(Boolean))).sort(),
+    [sources]
+  );
+
+  const sourcePublishers = useMemo(
+    () => Array.from(new Set(sources.map((source) => source.publisher).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'ko')),
+    [sources]
+  );
+
+  const filteredSources = useMemo(() => {
+    const q = sourceQuery.trim().toLowerCase();
+    const filtered = sources.filter((source) => {
+      const matchesQuery = !q || [source.title, source.publisher, source.summary, source.raw_text, source.url]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
+      const matchesType = sourceTypeFilter === 'all' || source.source_type === sourceTypeFilter;
+      const matchesPublisher = sourcePublisherFilter === 'all' || source.publisher === sourcePublisherFilter;
+      return matchesQuery && matchesType && matchesPublisher;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sourceSort === 'title') return a.title.localeCompare(b.title, 'ko');
+      const aTime = new Date(a.collected_at).getTime();
+      const bTime = new Date(b.collected_at).getTime();
+      return sourceSort === 'oldest' ? aTime - bTime : bTime - aTime;
+    });
+  }, [sources, sourceQuery, sourceTypeFilter, sourcePublisherFilter, sourceSort]);
 
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -269,70 +303,138 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-white">수집 Source</h2>
-            <p className="mt-1 text-[11px] text-gray-500">실제 Supabase knowledge_sources 테이블의 자료만 표시합니다.</p>
+            <p className="mt-1 text-[11px] text-gray-500">Supabase knowledge_sources에 저장된 자료를 검색/필터링해서 표시합니다.</p>
           </div>
           <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-[11px] font-bold text-cyan-200">{sources.length}건</span>
         </div>
 
-        <form onSubmit={createSource} className="mb-4 grid gap-3 rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-xs font-bold text-gray-300">
-              제목 <span className="text-cyan-300">*</span>
-              <input
-                value={sourceTitle}
-                onChange={(event) => setSourceTitle(event.target.value)}
-                placeholder="예: 2026 소비 트렌드 뉴스레터"
-                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
-              />
-            </label>
-            <label className="space-y-1 text-xs font-bold text-gray-300">
-              발행처
-              <input
-                value={sourcePublisher}
-                onChange={(event) => setSourcePublisher(event.target.value)}
-                placeholder="예: 오픈서베이, 캐릿, 뉴닉"
-                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
-              />
-            </label>
-          </div>
-          <label className="space-y-1 text-xs font-bold text-gray-300">
-            URL
-            <input
-              value={sourceUrl}
-              onChange={(event) => setSourceUrl(event.target.value)}
-              placeholder="https://..."
-              className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
-            />
-          </label>
-          <label className="space-y-1 text-xs font-bold text-gray-300">
-            원문/메모 <span className="text-cyan-300">*</span>
-            <textarea
-              value={sourceRawText}
-              onChange={(event) => setSourceRawText(event.target.value)}
-              placeholder="뉴스레터 원문, 기사 핵심 내용, 수집 메모를 붙여넣어줘."
-              rows={5}
-              className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal leading-relaxed text-gray-100 outline-none placeholder:text-gray-600"
-            />
-          </label>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <p className="text-[11px] text-gray-500">저장하면 바로 아래 Source 목록에 표시됩니다.</p>
+        <div className="mb-4 rounded-xl border border-gray-800 bg-gray-950/50 p-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid flex-1 gap-2 md:grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr]">
+              <div className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
+                <Search className="h-4 w-4 text-gray-500" />
+                <input
+                  value={sourceQuery}
+                  onChange={(event) => setSourceQuery(event.target.value)}
+                  placeholder="제목, 발행처, 본문, URL 검색"
+                  className="w-full bg-transparent text-xs text-gray-200 outline-none placeholder:text-gray-600"
+                />
+              </div>
+              <select
+                value={sourceTypeFilter}
+                onChange={(event) => setSourceTypeFilter(event.target.value)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="all">전체 타입</option>
+                {sourceTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+              <select
+                value={sourcePublisherFilter}
+                onChange={(event) => setSourcePublisherFilter(event.target.value)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="all">전체 발행처</option>
+                {sourcePublishers.map((publisher) => <option key={publisher} value={publisher}>{publisher}</option>)}
+              </select>
+              <select
+                value={sourceSort}
+                onChange={(event) => setSourceSort(event.target.value as 'newest' | 'oldest' | 'title')}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="newest">최신순</option>
+                <option value="oldest">오래된순</option>
+                <option value="title">제목순</option>
+              </select>
+            </div>
             <button
-              type="submit"
-              disabled={savingSource || !sourceTitle.trim() || !sourceRawText.trim()}
-              className="rounded-lg bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              type="button"
+              onClick={() => setShowSourceForm((current) => !current)}
+              className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20"
             >
-              {savingSource ? '저장 중...' : 'Source 저장'}
+              {showSourceForm ? '수동 추가 닫기' : '수동 Source 추가'}
             </button>
           </div>
-        </form>
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
+            <span>전체 {sources.length}건</span>
+            <span>·</span>
+            <span>필터 결과 {filteredSources.length}건</span>
+            {(sourceQuery || sourceTypeFilter !== 'all' || sourcePublisherFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => { setSourceQuery(''); setSourceTypeFilter('all'); setSourcePublisherFilter('all'); }}
+                className="font-bold text-cyan-300 hover:underline"
+              >
+                필터 초기화
+              </button>
+            )}
+          </div>
+        </div>
+
+        {showSourceForm && (
+          <form onSubmit={createSource} className="mb-4 grid gap-3 rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-xs font-bold text-gray-300">
+                제목 <span className="text-cyan-300">*</span>
+                <input
+                  value={sourceTitle}
+                  onChange={(event) => setSourceTitle(event.target.value)}
+                  placeholder="예: 2026 소비 트렌드 뉴스레터"
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-bold text-gray-300">
+                발행처
+                <input
+                  value={sourcePublisher}
+                  onChange={(event) => setSourcePublisher(event.target.value)}
+                  placeholder="예: 오픈서베이, 캐릿, 뉴닉"
+                  className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+                />
+              </label>
+            </div>
+            <label className="space-y-1 text-xs font-bold text-gray-300">
+              URL
+              <input
+                value={sourceUrl}
+                onChange={(event) => setSourceUrl(event.target.value)}
+                placeholder="https://..."
+                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+              />
+            </label>
+            <label className="space-y-1 text-xs font-bold text-gray-300">
+              원문/메모 <span className="text-cyan-300">*</span>
+              <textarea
+                value={sourceRawText}
+                onChange={(event) => setSourceRawText(event.target.value)}
+                placeholder="뉴스레터 원문, 기사 핵심 내용, 수집 메모를 붙여넣어줘."
+                rows={5}
+                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal leading-relaxed text-gray-100 outline-none placeholder:text-gray-600"
+              />
+            </label>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <p className="text-[11px] text-gray-500">수동 입력은 보조 기능입니다. 기본 화면은 저장된 DB 탐색용입니다.</p>
+              <button
+                type="submit"
+                disabled={savingSource || !sourceTitle.trim() || !sourceRawText.trim()}
+                className="rounded-lg bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {savingSource ? '저장 중...' : 'Source 저장'}
+              </button>
+            </div>
+          </form>
+        )}
         {sources.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-800 p-5 text-xs leading-relaxed text-gray-500">
-            아직 저장된 Source가 없어. 그래서 클릭해도 열릴 데이터가 없던 상태야. 다음 단계에서 “Source 입력/저장” 기능을 붙이면 여기에 목록이 표시돼.
+            아직 DB에 저장된 Source가 없어. 수집 파이프라인이나 수동 추가로 데이터가 들어오면 여기에 표시돼.
+          </div>
+        ) : filteredSources.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-800 p-5 text-xs leading-relaxed text-gray-500">
+            현재 필터 조건에 맞는 Source가 없어. 검색어/타입/발행처 필터를 조정해줘.
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
             <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
-              {sources.map((source) => (
+              {filteredSources.map((source) => (
                 <button
                   key={source.id}
                   type="button"
