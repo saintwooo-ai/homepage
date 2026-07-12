@@ -1,6 +1,0 @@
-{
-  "name": "UGNAS AI",
-  "description": "AI 작업 흐름, 프로필 협업, 지식 저장 상태를 시각적으로 확인하는 Hermes 운영 관제 대시보드",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
