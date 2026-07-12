@@ -38,6 +38,8 @@ type SourceItem = {
   source_type: string;
   title: string;
   publisher: string | null;
+  url: string | null;
+  raw_text: string | null;
   summary: string | null;
   collected_at: string;
 };
@@ -75,8 +77,13 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
   const [loading, setLoading] = useState(false);
+  const [savingSource, setSavingSource] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sourceTitle, setSourceTitle] = useState('');
+  const [sourcePublisher, setSourcePublisher] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceRawText, setSourceRawText] = useState('');
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedItemId) ?? reviewQueue.find((row) => row.knowledge_items?.id === selectedItemId)?.knowledge_items ?? null,
@@ -123,7 +130,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
         .limit(50),
       supabase
         .from('knowledge_sources')
-        .select('id,source_type,title,publisher,summary,raw_text,collected_at')
+        .select('id,source_type,title,publisher,url,summary,raw_text,collected_at')
         .order('collected_at', { ascending: false })
         .limit(20),
     ]);
@@ -152,6 +159,47 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     void loadKnowledge();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+
+  async function createSource(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) return;
+
+    const title = sourceTitle.trim();
+    const rawText = sourceRawText.trim();
+    if (!title || !rawText) {
+      setError('제목과 원문/메모는 필수야.');
+      return;
+    }
+
+    setSavingSource(true);
+    setError(null);
+    setMessage(null);
+
+    const summary = rawText.length > 220 ? `${rawText.slice(0, 220)}…` : rawText;
+    const { error: insertError } = await supabase.from('knowledge_sources').insert({
+      source_type: 'newsletter',
+      title,
+      publisher: sourcePublisher.trim() || null,
+      url: sourceUrl.trim() || null,
+      raw_text: rawText,
+      summary,
+      metadata: { created_from: 'homepage_source_inbox' },
+    });
+
+    setSavingSource(false);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    setSourceTitle('');
+    setSourcePublisher('');
+    setSourceUrl('');
+    setSourceRawText('');
+    setMessage('Source가 DB에 저장됐어.');
+    await loadKnowledge();
+  }
 
   async function updateReview(queueId: string, nextStatus: ReviewStatus) {
     if (!supabase) return;
@@ -225,6 +273,58 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
           </div>
           <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-[11px] font-bold text-cyan-200">{sources.length}건</span>
         </div>
+
+        <form onSubmit={createSource} className="mb-4 grid gap-3 rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-xs font-bold text-gray-300">
+              제목 <span className="text-cyan-300">*</span>
+              <input
+                value={sourceTitle}
+                onChange={(event) => setSourceTitle(event.target.value)}
+                placeholder="예: 2026 소비 트렌드 뉴스레터"
+                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+              />
+            </label>
+            <label className="space-y-1 text-xs font-bold text-gray-300">
+              발행처
+              <input
+                value={sourcePublisher}
+                onChange={(event) => setSourcePublisher(event.target.value)}
+                placeholder="예: 오픈서베이, 캐릿, 뉴닉"
+                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+              />
+            </label>
+          </div>
+          <label className="space-y-1 text-xs font-bold text-gray-300">
+            URL
+            <input
+              value={sourceUrl}
+              onChange={(event) => setSourceUrl(event.target.value)}
+              placeholder="https://..."
+              className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+            />
+          </label>
+          <label className="space-y-1 text-xs font-bold text-gray-300">
+            원문/메모 <span className="text-cyan-300">*</span>
+            <textarea
+              value={sourceRawText}
+              onChange={(event) => setSourceRawText(event.target.value)}
+              placeholder="뉴스레터 원문, 기사 핵심 내용, 수집 메모를 붙여넣어줘."
+              rows={5}
+              className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal leading-relaxed text-gray-100 outline-none placeholder:text-gray-600"
+            />
+          </label>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <p className="text-[11px] text-gray-500">저장하면 바로 아래 Source 목록에 표시됩니다.</p>
+            <button
+              type="submit"
+              disabled={savingSource || !sourceTitle.trim() || !sourceRawText.trim()}
+              className="rounded-lg bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {savingSource ? '저장 중...' : 'Source 저장'}
+            </button>
+          </div>
+        </form>
         {sources.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-800 p-5 text-xs leading-relaxed text-gray-500">
             아직 저장된 Source가 없어. 그래서 클릭해도 열릴 데이터가 없던 상태야. 다음 단계에서 “Source 입력/저장” 기능을 붙이면 여기에 목록이 표시돼.
@@ -254,6 +354,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
                   <div>
                     <div className="flex flex-wrap gap-2 text-[10px]"><Badge>{selectedSource.source_type}</Badge><Badge>{selectedSource.publisher ?? '발행처 미지정'}</Badge></div>
                     <h3 className="mt-3 text-lg font-bold text-white">{selectedSource.title}</h3>
+                    {selectedSource.url && <a href={selectedSource.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-semibold text-cyan-300 hover:underline">원문 링크 열기</a>}
                   </div>
                   <div>
                     <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">요약</h4>
