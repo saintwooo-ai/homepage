@@ -4,6 +4,8 @@ import { KnowledgePipeline } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'needs_revision';
+type QueueStatusFilter = 'all' | ReviewStatus;
+type KnowledgeSort = 'newest' | 'title' | 'grade';
 
 type KnowledgeItem = {
   id: string;
@@ -82,6 +84,62 @@ const evidenceLabel: Record<string, string> = {
   needs_verification: '검증 필요',
 };
 
+const categoryUnassignedValue = '__uncategorized';
+
+const reuseGradeOrder: Record<string, number> = {
+  A: 0,
+  B: 1,
+  C: 2,
+  D: 3,
+};
+
+const queueStatusOptions: Array<{ value: QueueStatusFilter; label: string }> = [
+  { value: 'all', label: '전체' },
+  { value: 'pending', label: '검토 대기' },
+  { value: 'approved', label: '승인' },
+  { value: 'needs_revision', label: '수정 필요' },
+  { value: 'rejected', label: '반려' },
+];
+
+const priorityOrder: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  normal: 2,
+  low: 3,
+};
+
+const priorityLabel: Record<string, string> = {
+  urgent: '긴급',
+  high: '높음',
+  medium: '보통',
+  normal: '보통',
+  low: '낮음',
+};
+
+const itemTypeOptions = ['report', 'insight', 'seed', 'frame', 'case', 'stat', 'quote', 'hypothesis', 'playbook'];
+const evidenceLevelOptions = ['official', 'reported', 'data_backed', 'inferred', 'unverified_original', 'needs_verification'];
+const reuseGradeOptions = ['A', 'B', 'C', 'D'];
+const rfpUseOptions = [
+  { value: 'problem_definition', label: '문제 정의' },
+  { value: 'market_change', label: '시장 변화' },
+  { value: 'target_insight', label: '타깃 인사이트' },
+  { value: 'strategy', label: '전략' },
+  { value: 'creative_rationale', label: '크리에이티브 근거' },
+  { value: 'media', label: '미디어' },
+  { value: 'case_support', label: '사례 근거' },
+  { value: 'risk_management', label: '리스크 관리' },
+  { value: 'needs_review', label: '검토 필요' },
+];
+
+function uniqueSorted(values: Array<string | null>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b, 'ko'));
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+}
+
 export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
   const [items, setItems] = useState<KnowledgeItem[]>([]);
@@ -89,7 +147,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
+  const [queueStatusFilter, setQueueStatusFilter] = useState<QueueStatusFilter>('all');
   const [loading, setLoading] = useState(false);
   const [savingSource, setSavingSource] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -104,6 +162,24 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   const [sourcePublisherFilter, setSourcePublisherFilter] = useState('all');
   const [sourceSort, setSourceSort] = useState<'newest' | 'oldest' | 'title'>('newest');
   const [connectionState, setConnectionState] = useState<ConnectionState>('checking');
+  const [itemTypeFilter, setItemTypeFilter] = useState('all');
+  const [itemReviewStatusFilter, setItemReviewStatusFilter] = useState('all');
+  const [itemEvidenceLevelFilter, setItemEvidenceLevelFilter] = useState('all');
+  const [itemReuseGradeFilter, setItemReuseGradeFilter] = useState('all');
+  const [itemCategoryFilter, setItemCategoryFilter] = useState('all');
+  const [itemSort, setItemSort] = useState<KnowledgeSort>('newest');
+  const [savingKnowledgeDraft, setSavingKnowledgeDraft] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftSummary, setDraftSummary] = useState('');
+  const [draftBody, setDraftBody] = useState('');
+  const [draftItemType, setDraftItemType] = useState('insight');
+  const [draftEvidenceLevel, setDraftEvidenceLevel] = useState('needs_verification');
+  const [draftReuseGrade, setDraftReuseGrade] = useState('C');
+  const [draftCategory, setDraftCategory] = useState('');
+  const [draftRfpUse, setDraftRfpUse] = useState('needs_review');
+  const [draftTargetAudience, setDraftTargetAudience] = useState('');
+  const [draftQueuePriority, setDraftQueuePriority] = useState('normal');
+  const [draftReviewNotes, setDraftReviewNotes] = useState('');
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedItemId) ?? reviewQueue.find((row) => row.knowledge_items?.id === selectedItemId)?.knowledge_items ?? null,
@@ -125,6 +201,31 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     [sources]
   );
 
+  const itemTypes = useMemo(
+    () => uniqueSorted(items.map((item) => item.item_type)),
+    [items]
+  );
+
+  const itemReviewStatuses = useMemo(
+    () => uniqueSorted(items.map((item) => item.review_status)),
+    [items]
+  );
+
+  const itemEvidenceLevels = useMemo(
+    () => uniqueSorted(items.map((item) => item.evidence_level)),
+    [items]
+  );
+
+  const itemReuseGrades = useMemo(
+    () => uniqueSorted(items.map((item) => item.reuse_grade)).sort((a, b) => (reuseGradeOrder[a] ?? 99) - (reuseGradeOrder[b] ?? 99) || a.localeCompare(b, 'ko')),
+    [items]
+  );
+
+  const itemCategories = useMemo(() => {
+    const categories = uniqueSorted(items.map((item) => item.category));
+    return items.some((item) => !item.category) ? [categoryUnassignedValue, ...categories] : categories;
+  }, [items]);
+
   const filteredSources = useMemo(() => {
     const q = sourceQuery.trim().toLowerCase();
     const filtered = sources.filter((source) => {
@@ -144,15 +245,74 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     });
   }, [sources, sourceQuery, sourceTypeFilter, sourcePublisherFilter, sourceSort]);
 
+  const queueStatusCounts = useMemo(() => {
+    return reviewQueue.reduce<Record<ReviewStatus, number>>((counts, row) => {
+      counts[row.queue_status] += 1;
+      return counts;
+    }, { pending: 0, approved: 0, rejected: 0, needs_revision: 0 });
+  }, [reviewQueue]);
+
+  const filteredReviewQueue = useMemo(() => {
+    const filtered = queueStatusFilter === 'all'
+      ? reviewQueue
+      : reviewQueue.filter((row) => row.queue_status === queueStatusFilter);
+
+    return [...filtered].sort((a, b) => {
+      const priorityDiff = (priorityOrder[a.priority] ?? 99) - (priorityOrder[b.priority] ?? 99);
+      if (priorityDiff !== 0) return priorityDiff;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [reviewQueue, queueStatusFilter]);
+
+  const selectedQueueRow = useMemo(
+    () => filteredReviewQueue.find((row) => row.knowledge_items?.id === selectedItemId || row.item_id === selectedItemId)
+      ?? filteredReviewQueue[0]
+      ?? null,
+    [filteredReviewQueue, selectedItemId]
+  );
+
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) =>
-      [item.title, item.one_line_summary, item.category, item.target_audience, item.rfp_use]
+    const filtered = items.filter((item) => {
+      const matchesQuery = !q || [item.title, item.one_line_summary, item.body, item.category, item.target_audience, item.rfp_use, item.item_type, item.review_status, item.evidence_level, item.reuse_grade]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [items, query]);
+        .some((value) => String(value).toLowerCase().includes(q));
+      const matchesType = itemTypeFilter === 'all' || item.item_type === itemTypeFilter;
+      const matchesReviewStatus = itemReviewStatusFilter === 'all' || item.review_status === itemReviewStatusFilter;
+      const matchesEvidenceLevel = itemEvidenceLevelFilter === 'all' || item.evidence_level === itemEvidenceLevelFilter;
+      const matchesReuseGrade = itemReuseGradeFilter === 'all' || item.reuse_grade === itemReuseGradeFilter;
+      const matchesCategory = itemCategoryFilter === 'all'
+        || (itemCategoryFilter === categoryUnassignedValue ? !item.category : item.category === itemCategoryFilter);
+      return matchesQuery && matchesType && matchesReviewStatus && matchesEvidenceLevel && matchesReuseGrade && matchesCategory;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (itemSort === 'title') return a.title.localeCompare(b.title, 'ko');
+      if (itemSort === 'grade') return (reuseGradeOrder[a.reuse_grade] ?? 99) - (reuseGradeOrder[b.reuse_grade] ?? 99) || a.title.localeCompare(b.title, 'ko');
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    });
+  }, [items, query, itemTypeFilter, itemReviewStatusFilter, itemEvidenceLevelFilter, itemReuseGradeFilter, itemCategoryFilter, itemSort]);
+
+  const visibleSelectedItem = useMemo(
+    () => filteredItems.find((item) => item.id === selectedItemId) ?? filteredItems[0] ?? selectedItem,
+    [filteredItems, selectedItem, selectedItemId]
+  );
+
+  const itemFiltersActive = query.trim() !== ''
+    || itemTypeFilter !== 'all'
+    || itemReviewStatusFilter !== 'all'
+    || itemEvidenceLevelFilter !== 'all'
+    || itemReuseGradeFilter !== 'all'
+    || itemCategoryFilter !== 'all';
+
+  function resetItemFilters() {
+    setQuery('');
+    setItemTypeFilter('all');
+    setItemReviewStatusFilter('all');
+    setItemEvidenceLevelFilter('all');
+    setItemReuseGradeFilter('all');
+    setItemCategoryFilter('all');
+  }
 
   async function loadKnowledge() {
     if (!supabase) return;
@@ -166,10 +326,6 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
       .select('id,item_id,source_id,queue_status,priority,notes,created_at,knowledge_items(*)')
       .order('created_at', { ascending: false })
       .limit(30);
-
-    if (statusFilter !== 'all') {
-      queueQuery.eq('queue_status', statusFilter);
-    }
 
     const [queueResult, itemsResult, sourcesResult] = await Promise.all([
       queueQuery,
@@ -218,7 +374,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
   useEffect(() => {
     void loadKnowledge();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, []);
 
 
   async function createSource(event: React.FormEvent<HTMLFormElement>) {
@@ -261,6 +417,99 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     await loadKnowledge();
   }
 
+  function fillDraftFromSource() {
+    if (!selectedSource) return;
+    const baseText = selectedSource.summary || selectedSource.raw_text || '';
+    setDraftTitle((current) => current || selectedSource.title);
+    setDraftSummary((current) => current || (baseText.length > 140 ? `${baseText.slice(0, 140)}…` : baseText));
+    setDraftBody((current) => current || [
+      selectedSource.summary ? `요약\n${selectedSource.summary}` : null,
+      selectedSource.raw_text ? `근거 원문/메모\n${selectedSource.raw_text}` : null,
+      selectedSource.url ? `원문 링크\n${selectedSource.url}` : null,
+    ].filter(Boolean).join('\n\n'));
+  }
+
+  async function createKnowledgeDraft(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !selectedSource) return;
+
+    const title = draftTitle.trim();
+    const oneLineSummary = draftSummary.trim();
+    const body = draftBody.trim();
+    const category = draftCategory.trim();
+    const targetAudience = draftTargetAudience.trim();
+    const reviewNotes = draftReviewNotes.trim();
+
+    if (!title || !oneLineSummary || !body || !category) {
+      setError('Knowledge Card 초안의 제목, 한 줄 요약, 본문/활용 메모, 카테고리는 필수야.');
+      return;
+    }
+
+    setSavingKnowledgeDraft(true);
+    setError(null);
+    setMessage(null);
+
+    const { data: insertedItem, error: itemInsertError } = await supabase
+      .from('knowledge_items')
+      .insert({
+        item_type: draftItemType,
+        title,
+        one_line_summary: oneLineSummary,
+        body,
+        source_id: selectedSource.id,
+        category,
+        target_audience: targetAudience || null,
+        rfp_use: draftRfpUse,
+        evidence_level: draftEvidenceLevel,
+        review_status: 'inbox',
+        reuse_grade: draftReuseGrade,
+        risk_flags: [],
+        metadata: { created_from: 'homepage_manual_source_card' },
+      })
+      .select('id')
+      .single();
+
+    if (itemInsertError || !insertedItem) {
+      setSavingKnowledgeDraft(false);
+      setError(itemInsertError?.message ?? 'knowledge_items 저장 결과를 확인할 수 없어.');
+      return;
+    }
+
+    const { error: queueInsertError } = await supabase
+      .from('knowledge_review_queue')
+      .insert({
+        item_id: insertedItem.id,
+        source_id: selectedSource.id,
+        queue_status: 'pending',
+        priority: draftQueuePriority,
+        notes: reviewNotes || `수동 생성 초안: ${selectedSource.title}`,
+      });
+
+    setSavingKnowledgeDraft(false);
+
+    if (queueInsertError) {
+      setError(`Knowledge Card는 저장됐지만 Review Queue 등록에 실패했어: ${queueInsertError.message}`);
+      await loadKnowledge();
+      setSelectedItemId(insertedItem.id);
+      return;
+    }
+
+    setDraftTitle('');
+    setDraftSummary('');
+    setDraftBody('');
+    setDraftItemType('insight');
+    setDraftEvidenceLevel('needs_verification');
+    setDraftReuseGrade('C');
+    setDraftCategory('');
+    setDraftRfpUse('needs_review');
+    setDraftTargetAudience('');
+    setDraftQueuePriority('normal');
+    setDraftReviewNotes('');
+    setMessage('선택한 Source 기반 Knowledge Card 초안이 검토 대기열에 등록됐어.');
+    await loadKnowledge();
+    setSelectedItemId(insertedItem.id);
+  }
+
   async function updateReview(queueId: string, nextStatus: ReviewStatus) {
     if (!supabase) return;
     setLoading(true);
@@ -276,7 +525,12 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
       setError(updateError.message);
       return;
     }
-    setMessage(nextStatus === 'approved' ? '지식 카드가 승인됐어.' : nextStatus === 'rejected' ? '지식 카드가 반려됐어.' : '수정 필요로 표시했어.');
+    const feedback = nextStatus === 'approved'
+      ? 'Review Queue 상태를 승인으로 변경했어. knowledge_items.review_status는 별도 검토 필드야.'
+      : nextStatus === 'rejected'
+        ? 'Review Queue 상태를 반려로 변경했어.'
+        : 'Review Queue 상태를 수정 필요로 표시했어.';
+    setMessage(feedback);
     await loadKnowledge();
   }
 
@@ -501,6 +755,130 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
                     <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">원문/수집 텍스트</h4>
                     <p className="whitespace-pre-wrap rounded-xl border border-gray-800 bg-gray-950/60 p-4 text-xs leading-relaxed text-gray-300">{selectedSource.raw_text || '원문 텍스트가 아직 없어.'}</p>
                   </div>
+
+                  <form onSubmit={createKnowledgeDraft} className="grid gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-950/10 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <h4 className="text-sm font-bold text-indigo-100">선택 Source로 Knowledge Card 초안 만들기</h4>
+                        <p className="mt-1 text-[11px] leading-relaxed text-gray-500">자동 생성이 아니라 사람이 입력한 값을 knowledge_items에 저장하고 Review Queue pending으로 보냅니다.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={fillDraftFromSource}
+                        className="rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-[11px] font-bold text-indigo-200 hover:bg-indigo-500/20"
+                      >
+                        Source 내용 채우기
+                      </button>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        제목 <span className="text-indigo-300">*</span>
+                        <input
+                          value={draftTitle}
+                          onChange={(event) => setDraftTitle(event.target.value)}
+                          placeholder="카드 제목"
+                          className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+                        />
+                      </label>
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        카테고리 <span className="text-indigo-300">*</span>
+                        <input
+                          value={draftCategory}
+                          onChange={(event) => setDraftCategory(event.target.value)}
+                          placeholder="예: 소비 트렌드, 리테일, 미디어"
+                          className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+                        />
+                      </label>
+                    </div>
+
+                    <label className="space-y-1 text-xs font-bold text-gray-300">
+                      한 줄 요약 <span className="text-indigo-300">*</span>
+                      <input
+                        value={draftSummary}
+                        onChange={(event) => setDraftSummary(event.target.value)}
+                        placeholder="RFP나 제안서에서 재사용 가능한 한 문장"
+                        className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs font-bold text-gray-300">
+                      본문/활용 메모 <span className="text-indigo-300">*</span>
+                      <textarea
+                        value={draftBody}
+                        onChange={(event) => setDraftBody(event.target.value)}
+                        placeholder="근거, 해석, 제안서 활용 맥락을 사람이 정리해서 입력"
+                        rows={5}
+                        className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal leading-relaxed text-gray-100 outline-none placeholder:text-gray-600"
+                      />
+                    </label>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        타입
+                        <select value={draftItemType} onChange={(event) => setDraftItemType(event.target.value)} className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100">
+                          {itemTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        근거 수준
+                        <select value={draftEvidenceLevel} onChange={(event) => setDraftEvidenceLevel(event.target.value)} className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100">
+                          {evidenceLevelOptions.map((level) => <option key={level} value={level}>{evidenceLabel[level] ?? level}</option>)}
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        재사용 등급
+                        <select value={draftReuseGrade} onChange={(event) => setDraftReuseGrade(event.target.value)} className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100">
+                          {reuseGradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        RFP 활용 위치
+                        <select value={draftRfpUse} onChange={(event) => setDraftRfpUse(event.target.value)} className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100">
+                          {rfpUseOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        타깃
+                        <input
+                          value={draftTargetAudience}
+                          onChange={(event) => setDraftTargetAudience(event.target.value)}
+                          placeholder="예: Z세대, B2B 의사결정자"
+                          className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+                        />
+                      </label>
+                      <label className="space-y-1 text-xs font-bold text-gray-300">
+                        Queue 우선순위
+                        <select value={draftQueuePriority} onChange={(event) => setDraftQueuePriority(event.target.value)} className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100">
+                          {['normal', 'high', 'urgent', 'low'].map((priority) => <option key={priority} value={priority}>{priorityLabel[priority] ?? priority}</option>)}
+                        </select>
+                      </label>
+                    </div>
+
+                    <label className="space-y-1 text-xs font-bold text-gray-300">
+                      검토 메모
+                      <input
+                        value={draftReviewNotes}
+                        onChange={(event) => setDraftReviewNotes(event.target.value)}
+                        placeholder="검토자가 확인해야 할 포인트"
+                        className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-normal text-gray-100 outline-none placeholder:text-gray-600"
+                      />
+                    </label>
+
+                    <div className="flex flex-col gap-2 border-t border-gray-800 pt-3 md:flex-row md:items-center md:justify-between">
+                      <p className="text-[11px] text-gray-500">저장 순서: knowledge_items 생성 → knowledge_review_queue pending 등록.</p>
+                      <button
+                        type="submit"
+                        disabled={savingKnowledgeDraft || !draftTitle.trim() || !draftSummary.trim() || !draftBody.trim() || !draftCategory.trim()}
+                        className="rounded-lg bg-indigo-500/10 px-4 py-2 text-xs font-bold text-indigo-200 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {savingKnowledgeDraft ? '초안 저장 중...' : '초안 저장 후 검토 대기 등록'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               ) : <div className="text-xs text-gray-500">Source를 선택해줘.</div>}
             </div>
@@ -510,73 +888,191 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
 
       <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
         <section className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white">Review Queue</h2>
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as 'all' | ReviewStatus)}
-              className="rounded-lg border border-gray-800 bg-gray-950 px-2 py-1 text-[11px] text-gray-300"
-            >
-              <option value="all">전체</option>
-              <option value="pending">검토 대기</option>
-              <option value="approved">승인</option>
-              <option value="rejected">반려</option>
-              <option value="needs_revision">수정 필요</option>
-            </select>
+          <div className="mb-3 flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-white">Review Queue</h2>
+                <p className="mt-1 text-[11px] text-gray-500">knowledge_review_queue 상태별 필터와 우선순위 순서로 후보 지식 카드를 검토합니다.</p>
+              </div>
+              <select
+                value={queueStatusFilter}
+                onChange={(event) => setQueueStatusFilter(event.target.value as QueueStatusFilter)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-2 py-1 text-[11px] text-gray-300"
+              >
+                {queueStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[10px] text-gray-500">
+              <span className="rounded-full bg-gray-900 px-2.5 py-1 font-bold text-gray-300">전체 {reviewQueue.length}건</span>
+              <span className="rounded-full bg-amber-500/10 px-2.5 py-1 font-bold text-amber-200">대기 {queueStatusCounts.pending}건</span>
+              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 font-bold text-emerald-200">승인 {queueStatusCounts.approved}건</span>
+              <span className="rounded-full bg-yellow-500/10 px-2.5 py-1 font-bold text-yellow-200">수정 {queueStatusCounts.needs_revision}건</span>
+              <span className="rounded-full bg-red-500/10 px-2.5 py-1 font-bold text-red-200">반려 {queueStatusCounts.rejected}건</span>
+            </div>
           </div>
 
           <div className="space-y-2">
-            {reviewQueue.length === 0 && (
-              <div className="rounded-xl border border-dashed border-gray-800 p-4 text-xs text-gray-500">
-                검토 대기열이 비어 있어. 아직 AI 후보 지식 카드가 생성되지 않았다는 뜻이야.
+            {reviewQueue.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-800 p-4 text-xs leading-relaxed text-gray-500">
+                검토 대기열이 비어 있어. 아직 검토할 지식 카드가 생성되지 않았거나 모든 후보가 다른 저장소에만 있어.
               </div>
-            )}
-            {reviewQueue.map((row) => (
+            ) : filteredReviewQueue.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-800 p-4 text-xs leading-relaxed text-gray-500">
+                현재 선택한 상태 필터에 맞는 Review Queue 항목이 없어. 상단 필터를 전체나 다른 상태로 바꿔줘.
+              </div>
+            ) : filteredReviewQueue.map((row) => (
               <button
                 key={row.id}
                 type="button"
                 onClick={() => setSelectedItemId(row.knowledge_items?.id ?? row.item_id)}
-                className="w-full rounded-xl border border-gray-800 bg-gray-900/50 p-3 text-left hover:border-cyan-500/30 hover:bg-gray-900"
+                className={`w-full rounded-xl border p-3 text-left transition ${selectedQueueRow?.id === row.id ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-gray-800 bg-gray-900/50 hover:border-cyan-500/30 hover:bg-gray-900'}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-bold uppercase text-cyan-400">{row.priority}</span>
+                  <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-300">우선순위 {priorityLabel[row.priority] ?? row.priority}</span>
                   <span className="rounded-full bg-gray-950 px-2 py-0.5 text-[10px] text-gray-400">{statusLabel[row.queue_status] ?? row.queue_status}</span>
                 </div>
                 <p className="mt-2 line-clamp-2 text-xs font-semibold text-gray-100">{row.knowledge_items?.title ?? row.item_id}</p>
                 <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{row.knowledge_items?.one_line_summary ?? row.notes ?? '요약 없음'}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-gray-600">
+                  <span>생성 {formatDate(row.created_at)}</span>
+                  {row.notes && <span>· 메모 있음</span>}
+                </div>
               </button>
             ))}
           </div>
+
+          {selectedQueueRow && (
+            <div className="mt-4 rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-3 text-xs leading-relaxed text-gray-300">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="font-bold text-cyan-200">선택 항목 상세</span>
+                <Badge>{statusLabel[selectedQueueRow.queue_status] ?? selectedQueueRow.queue_status}</Badge>
+                <Badge>우선순위 {priorityLabel[selectedQueueRow.priority] ?? selectedQueueRow.priority}</Badge>
+                <Badge>{formatDate(selectedQueueRow.created_at)}</Badge>
+              </div>
+              <p className="font-semibold text-gray-100">{selectedQueueRow.knowledge_items?.title ?? selectedQueueRow.item_id}</p>
+              <p className="mt-1 text-gray-500">{selectedQueueRow.notes || selectedQueueRow.knowledge_items?.one_line_summary || '검토 메모가 아직 없어.'}</p>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-sm font-bold text-white">Knowledge Cards</h2>
-            <div className="flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-950 px-3 py-2">
-              <Search className="h-4 w-4 text-gray-500" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="키워드, 타깃, RFP 위치 검색"
-                className="w-56 bg-transparent text-xs text-gray-200 outline-none placeholder:text-gray-600"
-              />
+          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-white">Knowledge Cards</h2>
+              <p className="mt-1 text-[11px] text-gray-500">Supabase knowledge_items에 저장된 카드 목록을 검색/필터/정렬합니다.</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px] text-gray-500">
+              <span className="rounded-full bg-indigo-500/10 px-3 py-1 font-bold text-indigo-200">전체 {items.length}건</span>
+              <span className="rounded-full bg-gray-900 px-3 py-1 font-bold text-gray-300">필터 결과 {filteredItems.length}건</span>
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-xl border border-gray-800 bg-gray-950/50 p-3">
+            <div className="grid gap-2 xl:grid-cols-[1.3fr_0.8fr_0.9fr_1fr_0.7fr_0.9fr_0.8fr]">
+              <div className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
+                <Search className="h-4 w-4 text-gray-500" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="제목, 요약, 본문, 타깃, RFP 위치 검색"
+                  className="w-full bg-transparent text-xs text-gray-200 outline-none placeholder:text-gray-600"
+                />
+              </div>
+              <select
+                value={itemTypeFilter}
+                onChange={(event) => setItemTypeFilter(event.target.value)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="all">전체 타입</option>
+                {itemTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              </select>
+              <select
+                value={itemReviewStatusFilter}
+                onChange={(event) => setItemReviewStatusFilter(event.target.value)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="all">전체 검토상태</option>
+                {itemReviewStatuses.map((status) => <option key={status} value={status}>{statusLabel[status] ?? status}</option>)}
+              </select>
+              <select
+                value={itemEvidenceLevelFilter}
+                onChange={(event) => setItemEvidenceLevelFilter(event.target.value)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="all">전체 근거수준</option>
+                {itemEvidenceLevels.map((level) => <option key={level} value={level}>{evidenceLabel[level] ?? level}</option>)}
+              </select>
+              <select
+                value={itemReuseGradeFilter}
+                onChange={(event) => setItemReuseGradeFilter(event.target.value)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="all">전체 등급</option>
+                {itemReuseGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              </select>
+              <select
+                value={itemCategoryFilter}
+                onChange={(event) => setItemCategoryFilter(event.target.value)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="all">전체 카테고리</option>
+                {itemCategories.map((category) => (
+                  <option key={category} value={category}>{category === categoryUnassignedValue ? '미지정' : category}</option>
+                ))}
+              </select>
+              <select
+                value={itemSort}
+                onChange={(event) => setItemSort(event.target.value as KnowledgeSort)}
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-300"
+              >
+                <option value="newest">최신순</option>
+                <option value="title">제목순</option>
+                <option value="grade">등급순</option>
+              </select>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-500">
+              <span>전체 {items.length}건</span>
+              <span>·</span>
+              <span>필터 결과 {filteredItems.length}건</span>
+              {itemFiltersActive && (
+                <button
+                  type="button"
+                  onClick={resetItemFilters}
+                  className="font-bold text-indigo-300 hover:underline"
+                >
+                  필터 초기화
+                </button>
+              )}
             </div>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
             <div className="max-h-[540px] space-y-2 overflow-y-auto pr-1">
-              {filteredItems.length === 0 && <p className="text-xs text-gray-500">검색 결과가 없어.</p>}
-              {filteredItems.map((item) => (
+              {items.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-800 p-5 text-xs leading-relaxed text-gray-500">
+                  아직 DB에 저장된 지식 카드가 없어. Source 기반 생성이나 수동 입력으로 knowledge_items가 생기면 여기에 표시돼.
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-800 p-5 text-xs leading-relaxed text-gray-500">
+                  현재 검색어/필터 조건에 맞는 지식 카드가 없어. 타입, 검토상태, 근거수준, 등급, 카테고리 필터를 조정해줘.
+                </div>
+              ) : filteredItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedItemId(item.id)}
-                  className={`w-full rounded-xl border p-3 text-left transition ${selectedItem?.id === item.id ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-gray-800 bg-gray-900/40 hover:border-gray-700'}`}
+                  className={`w-full rounded-xl border p-3 text-left transition ${visibleSelectedItem?.id === item.id ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-gray-800 bg-gray-900/40 hover:border-gray-700'}`}
                 >
-                  <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
                     <span className="font-bold uppercase text-indigo-300">{item.item_type}</span>
-                    <span>·</span>
+                    <span className="rounded-full bg-gray-950 px-2 py-0.5 font-bold text-gray-400">{item.reuse_grade}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-gray-500">
                     <span>{statusLabel[item.review_status] ?? item.review_status}</span>
+                    <span>·</span>
+                    <span>{evidenceLabel[item.evidence_level] ?? item.evidence_level}</span>
+                    <span>·</span>
+                    <span>{item.category ?? '미지정'}</span>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs font-bold text-gray-100">{item.title}</p>
                   <p className="mt-1 line-clamp-2 text-[11px] text-gray-500">{item.one_line_summary}</p>
@@ -585,41 +1081,45 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
             </div>
 
             <div className="rounded-2xl border border-gray-800 bg-gray-900/40 p-5">
-              {selectedItem ? (
+              {items.length > 0 && filteredItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-800 p-8 text-center text-sm text-gray-500">
+                  선택 가능한 필터 결과가 없어. 조건을 초기화하거나 다른 필터를 선택해줘.
+                </div>
+              ) : visibleSelectedItem ? (
                 <div className="space-y-4">
                   <div>
                     <div className="flex flex-wrap gap-2 text-[10px]">
-                      <Badge>{selectedItem.item_type}</Badge>
-                      <Badge>{statusLabel[selectedItem.review_status] ?? selectedItem.review_status}</Badge>
-                      <Badge>{evidenceLabel[selectedItem.evidence_level] ?? selectedItem.evidence_level}</Badge>
-                      <Badge>재사용 {selectedItem.reuse_grade}</Badge>
+                      <Badge>{visibleSelectedItem.item_type}</Badge>
+                      <Badge>{statusLabel[visibleSelectedItem.review_status] ?? visibleSelectedItem.review_status}</Badge>
+                      <Badge>{evidenceLabel[visibleSelectedItem.evidence_level] ?? visibleSelectedItem.evidence_level}</Badge>
+                      <Badge>재사용 {visibleSelectedItem.reuse_grade}</Badge>
                     </div>
-                    <h3 className="mt-3 text-lg font-bold text-white">{selectedItem.title}</h3>
-                    <p className="mt-2 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 text-sm leading-relaxed text-indigo-100">{selectedItem.one_line_summary}</p>
+                    <h3 className="mt-3 text-lg font-bold text-white">{visibleSelectedItem.title}</h3>
+                    <p className="mt-2 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 text-sm leading-relaxed text-indigo-100">{visibleSelectedItem.one_line_summary}</p>
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-3">
-                    <InfoBox label="카테고리" value={selectedItem.category ?? '미지정'} />
-                    <InfoBox label="타깃" value={selectedItem.target_audience ?? '미지정'} />
-                    <InfoBox label="RFP 활용" value={selectedItem.rfp_use} />
+                    <InfoBox label="카테고리" value={visibleSelectedItem.category ?? '미지정'} />
+                    <InfoBox label="타깃" value={visibleSelectedItem.target_audience ?? '미지정'} />
+                    <InfoBox label="RFP 활용" value={visibleSelectedItem.rfp_use} />
                   </div>
 
                   <div>
                     <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">본문/활용 메모</h4>
                     <p className="whitespace-pre-wrap rounded-xl border border-gray-800 bg-gray-950/60 p-4 text-xs leading-relaxed text-gray-300">
-                      {selectedItem.body || '본문이 아직 없어. 자동 생성 후보를 승인하기 전에 근거와 사용 맥락을 채워야 해.'}
+                      {visibleSelectedItem.body || '본문이 아직 없어. 검토 전에 근거와 사용 맥락을 채워야 해.'}
                     </p>
                   </div>
 
                   <div>
                     <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gray-500"><Tags className="h-3.5 w-3.5" /> 리스크 플래그</h4>
                     <div className="flex flex-wrap gap-2">
-                      {(selectedItem.risk_flags?.length ? selectedItem.risk_flags : ['none']).map((flag) => <Badge key={flag}>{flag}</Badge>)}
+                      {(visibleSelectedItem.risk_flags?.length ? visibleSelectedItem.risk_flags : ['none']).map((flag) => <Badge key={flag}>{flag}</Badge>)}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2 border-t border-gray-800 pt-4">
-                    {reviewQueue.filter((row) => row.item_id === selectedItem.id).map((row) => (
+                    {reviewQueue.filter((row) => row.item_id === visibleSelectedItem.id).map((row) => (
                       <React.Fragment key={row.id}>
                         <button
                           type="button"
@@ -647,7 +1147,7 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
                         </button>
                       </React.Fragment>
                     ))}
-                    {!reviewQueue.some((row) => row.item_id === selectedItem.id) && (
+                    {!reviewQueue.some((row) => row.item_id === visibleSelectedItem.id) && (
                       <span className="text-xs text-gray-500">이 카드는 현재 검토 대기열에 없어.</span>
                     )}
                   </div>
