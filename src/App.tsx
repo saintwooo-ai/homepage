@@ -17,12 +17,13 @@ import {
   RefreshCw, 
   Sun, 
   Moon, 
-  AlertCircle,
   Menu,
   X,
   Clock,
   Play,
   Layers,
+  Activity,
+  GitBranch,
   Users,
   UserRound
 } from 'lucide-react';
@@ -40,6 +41,8 @@ import DashboardView from './components/DashboardView';
 import KanbanView from './components/KanbanView';
 import ProfilesView from './components/ProfilesView';
 import KnowledgeView from './components/KnowledgeView';
+import WorkConsoleView from './components/work-console/WorkConsoleView';
+import AgentFlowTimelineView from './components/AgentFlowTimelineView';
 import EventsView from './components/EventsView';
 import MembersView from './components/MembersView';
 import AccountView from './components/AccountView';
@@ -48,7 +51,7 @@ import { useAuth } from './auth/AuthContext';
 export default function App() {
   // Navigation & UI State
   const { isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'kanban' | 'profiles' | 'knowledge' | 'events' | 'members' | 'account'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'kanban' | 'profiles' | 'agentFlow' | 'knowledge' | 'events' | 'members' | 'account' | 'workConsole'>('dashboard');
   const [darkMode, setDarkMode] = useState<boolean>(true); // Default dark mode as recommended
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
@@ -186,7 +189,7 @@ export default function App() {
     setTimerCount(10);
   };
 
-  // User Action: Approve Task (For 'needs_review' status)
+  // User Action: Approve Task (local demo simulation for 'needs_review' status)
   const handleApproveTask = (taskId: string) => {
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0];
@@ -199,7 +202,7 @@ export default function App() {
         return {
           ...t,
           status: 'completed',
-          currentStep: '사용자 승인 완료. 데몬 서버 재배포 및 게이트웨이 정상 활성화 완료',
+          currentStep: '사용자 승인 시뮬레이션 완료. 실제 재배포/게이트웨이 변경 없음',
           nextAction: '없음',
           updatedAt: `2026-07-11 ${timeStr.slice(0, 5)}`
         };
@@ -215,7 +218,7 @@ export default function App() {
           status: 'healthy',
           callCount: p.callCount + 1,
           lastUsedAt: '방금 전',
-          recentTask: 'gateway SSL 인증서 자동 재배포 및 보안 키 동기화'
+          recentTask: 'mock 승인 흐름 표시 — 실제 gateway/보안 키 동기화 없음'
         };
       }
       return p;
@@ -225,7 +228,7 @@ export default function App() {
       id: `evt_approved_${Date.now()}`,
       time: timeStr,
       actor: 'server',
-      action: `[사용자 승인 수신]: gateway SSL 자원 동적 마운트 및 라우터 재구동 완료 (200 OK)`,
+      action: `[mock 승인 수신]: 로컬 UI 상태만 완료로 표시 — 실제 gateway/라우터 재구동 또는 200 OK 검증 없음`,
       level: 'success'
     };
 
@@ -509,17 +512,17 @@ export default function App() {
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5 font-semibold text-cyan-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            UGNAS CORE v1.0.2 ONLINE
+            UGNAS CORE v1.0.2 MOCK DEMO
           </span>
           <span className="hidden sm:inline text-gray-500">|</span>
-          <span className="hidden sm:inline">VPS ENVIRONMENT: NODE_ENV=production</span>
+          <span className="hidden sm:inline">SIMULATION VIEW: no live VPS/gateway/API connection</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1">
             <Clock className="w-3.5 h-3.5" />
             UTC 2026-07-11
           </span>
-          <span>● OPERATIONAL</span>
+          <span>● MOCK ONLY</span>
         </div>
       </div>
 
@@ -576,6 +579,18 @@ export default function App() {
                 <Layers className="w-4 h-4" />
                 헤르메스 칸반보드
               </button>
+
+              <button
+                onClick={() => { setActiveTab('workConsole'); setIsSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
+                  activeTab === 'workConsole'
+                    ? (darkMode ? 'bg-indigo-500/10 text-cyan-400 border border-indigo-500/20' : 'bg-indigo-500/5 text-indigo-600 border border-indigo-500/15')
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/10'
+                }`}
+              >
+                <Activity className="w-4 h-4" />
+                Work Console
+              </button>
               
               <button
                 onClick={() => { setActiveTab('profiles'); setIsSidebarOpen(false); }}
@@ -587,6 +602,18 @@ export default function App() {
               >
                 <Cpu className="w-4 h-4" />
                 협업 프로필
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('agentFlow'); setIsSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
+                  activeTab === 'agentFlow'
+                    ? (darkMode ? 'bg-indigo-500/10 text-cyan-400 border border-indigo-500/20' : 'bg-indigo-500/5 text-indigo-600 border border-indigo-500/15')
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/10'
+                }`}
+              >
+                <GitBranch className="w-4 h-4" />
+                에이전트 플로우
               </button>
 
               <button
@@ -705,14 +732,19 @@ export default function App() {
           )}
 
           {activeTab === 'kanban' && (
-            <KanbanView
-              tasks={tasks}
-              onApproveTask={handleApproveTask}
-            />
+            <KanbanView />
+          )}
+
+          {activeTab === 'workConsole' && (
+            <WorkConsoleView />
           )}
 
           {activeTab === 'profiles' && (
             <ProfilesView profiles={profiles} />
+          )}
+
+          {activeTab === 'agentFlow' && (
+            <AgentFlowTimelineView />
           )}
 
           {activeTab === 'knowledge' && (

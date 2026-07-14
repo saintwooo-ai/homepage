@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Database, RefreshCw, Search, ShieldCheck, AlertCircle, CheckCircle2, XCircle, FileText, GitBranch, Tags, BookOpen } from 'lucide-react';
 import { KnowledgePipeline } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import MimirPhase2Panel from './MimirPhase2Panel';
 
 type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'needs_revision';
 type QueueStatusFilter = 'all' | ReviewStatus;
@@ -413,8 +414,8 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     setSourcePublisher('');
     setSourceUrl('');
     setSourceRawText('');
-    setMessage('Source가 DB에 저장됐어.');
     await loadKnowledge();
+    setMessage('Source가 DB에 저장됐어. 목록에서 검색/필터로 확인할 수 있어.');
   }
 
   function fillDraftFromSource() {
@@ -505,8 +506,8 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
     setDraftTargetAudience('');
     setDraftQueuePriority('normal');
     setDraftReviewNotes('');
-    setMessage('선택한 Source 기반 Knowledge Card 초안이 검토 대기열에 등록됐어.');
     await loadKnowledge();
+    setMessage('선택한 Source 기반 Knowledge Card 초안이 검토 대기열에 등록됐어.');
     setSelectedItemId(insertedItem.id);
   }
 
@@ -536,9 +537,12 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
 
   if (!isSupabaseConfigured) {
     return (
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-950/20 p-6 text-amber-100">
-        <h1 className="flex items-center gap-2 text-lg font-bold"><AlertCircle className="h-5 w-5" /> Supabase 연결 필요</h1>
-        <p className="mt-2 text-sm text-amber-200/80">`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`가 설정되어야 DB 지식화 화면을 사용할 수 있어.</p>
+      <div className="space-y-6">
+        <MimirPhase2Panel />
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-950/20 p-6 text-amber-100">
+          <h1 className="flex items-center gap-2 text-lg font-bold"><AlertCircle className="h-5 w-5" /> Supabase 연결 필요</h1>
+          <p className="mt-2 text-sm text-amber-200/80">`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`가 설정되어야 DB 지식화 화면을 사용할 수 있어.</p>
+        </div>
       </div>
     );
   }
@@ -566,6 +570,8 @@ export default function KnowledgeView({ knowledge }: KnowledgeViewProps) {
           </button>
         </div>
       </div>
+
+      <MimirPhase2Panel />
 
       <ConnectionAuditPanel
         state={connectionState}

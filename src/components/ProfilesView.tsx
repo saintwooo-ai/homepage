@@ -17,6 +17,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Profile } from '../types';
+import ProfileWorkStatePanel from './ProfileWorkStatePanel';
 
 interface ProfilesViewProps {
   profiles: Profile[];
@@ -101,6 +102,8 @@ export default function ProfilesView({ profiles }: ProfilesViewProps) {
           현재 UGNAS AI에 탑재된 전문 역할 프로필 명단입니다. 라우터(router)가 사용자 요청에 부합하는 프로필들을 동적으로 호출하여 멀티 에이전트 협업 네트워크를 구성합니다.
         </p>
       </div>
+
+      <ProfileWorkStatePanel />
 
       {/* Filter Toolbar */}
       <div className="flex flex-col md:flex-row gap-3 items-center justify-between bg-gray-950/20 border border-gray-800/80 p-4 rounded-xl">

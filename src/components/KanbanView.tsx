@@ -3,227 +3,336 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Clock, 
-  CheckCircle2, 
-  AlertTriangle, 
-  XCircle, 
-  User, 
-  Hourglass, 
-  TrendingUp, 
-  Cpu, 
-  ArrowRight,
-  ShieldCheck
+import { AnimatePresence, motion } from 'motion/react';
+import { useState, type ReactNode } from 'react';
+import {
+  AlertOctagon,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Cpu,
+  GitBranch,
+  Hourglass,
+  Layers3,
+  PauseCircle,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  UserRoundCheck,
 } from 'lucide-react';
-import { Task, TaskStatus } from '../types';
+import {
+  INITIAL_PROFILE_WORK_STATES,
+  INITIAL_WORK_EVENTS,
+  INITIAL_WORK_ITEMS,
+  WORK_CONSOLE_SUMMARY,
+} from '../data/mockWorkConsole';
+import type { WorkItem, WorkItemStatus } from '../types/workConsole';
 
-interface KanbanViewProps {
-  tasks: Task[];
-  onApproveTask: (taskId: string) => void;
+interface WorkStatusColumn {
+  id: WorkItemStatus;
+  title: string;
+  helper: string;
+  icon: ReactNode;
+  accentClass: string;
+  emptyText: string;
 }
 
-export default function KanbanView({ tasks, onApproveTask }: KanbanViewProps) {
-  // 정의된 칸반 컬럼 목록
-  const columns = [
-    {
-      id: 'idle' as TaskStatus,
-      title: '대기 중 (Ready)',
-      color: 'border-gray-800 bg-gray-900/10 text-gray-400',
-      icon: <Hourglass className="w-4 h-4 text-gray-500" />
-    },
-    {
-      id: 'in_progress' as TaskStatus,
-      title: '수행 중 (Active)',
-      color: 'border-blue-500/20 bg-blue-500/5 text-blue-400',
-      icon: <Clock className="w-4 h-4 text-blue-400 animate-spin-slow" />
-    },
-    {
-      id: 'needs_review' as TaskStatus,
-      title: '사용자 검토 (Awaiting Action)',
-      color: 'border-amber-500/30 bg-amber-500/5 text-amber-300',
-      icon: <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" />
-    },
-    {
-      id: 'completed' as TaskStatus,
-      title: '작업 종결 (Archived)',
-      color: 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400',
-      icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-    }
-  ];
+const columns: WorkStatusColumn[] = [
+  {
+    id: 'queued',
+    title: '대기',
+    helper: '아직 담당자가 실행하지 않은 작업',
+    icon: <Hourglass className="w-4 h-4 text-slate-400" />,
+    accentClass: 'border-slate-700/70 bg-slate-500/5 text-slate-300',
+    emptyText: '대기 중인 작업 없음',
+  },
+  {
+    id: 'running',
+    title: '진행중',
+    helper: '프로필이 현재 처리 중인 작업',
+    icon: <Clock className="w-4 h-4 text-blue-300 animate-spin-slow" />,
+    accentClass: 'border-blue-500/30 bg-blue-500/10 text-blue-200',
+    emptyText: '진행 중인 작업 없음',
+  },
+  {
+    id: 'needs_approval',
+    title: '승인필요',
+    helper: '사용자 또는 운영 승인 대기',
+    icon: <ShieldCheck className="w-4 h-4 text-amber-300" />,
+    accentClass: 'border-amber-400/40 bg-amber-500/10 text-amber-200 shadow-amber-500/10',
+    emptyText: '승인 대기 없음',
+  },
+  {
+    id: 'blocked',
+    title: '막힘',
+    helper: '입력·권한·범위 문제로 중단',
+    icon: <AlertOctagon className="w-4 h-4 text-rose-300" />,
+    accentClass: 'border-rose-500/40 bg-rose-500/10 text-rose-200 shadow-rose-500/10',
+    emptyText: '막힌 작업 없음',
+  },
+  {
+    id: 'in_review',
+    title: '검토중',
+    helper: 'checker 또는 사람이 검토 중',
+    icon: <PauseCircle className="w-4 h-4 text-violet-300" />,
+    accentClass: 'border-violet-500/35 bg-violet-500/10 text-violet-200',
+    emptyText: '검토 중인 작업 없음',
+  },
+  {
+    id: 'completed',
+    title: '완료',
+    helper: '산출물과 검증이 끝난 작업',
+    icon: <CheckCircle2 className="w-4 h-4 text-emerald-300" />,
+    accentClass: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200',
+    emptyText: '완료 작업 없음',
+  },
+];
 
-  // 각 태스크를 컬럼 그룹으로 매핑 (failed 상태는 completed 쪽에 묶어서 표시하거나 별도로 필터링)
-  const getTasksByColumn = (status: TaskStatus) => {
-    if (status === 'completed') {
-      return tasks.filter(t => t.status === 'completed' || t.status === 'failed');
-    }
-    return tasks.filter(t => t.status === status);
-  };
+const priorityStyles: Record<WorkItem['priority'], string> = {
+  low: 'bg-slate-900 text-slate-400 border-slate-800',
+  normal: 'bg-gray-900 text-gray-300 border-gray-800',
+  high: 'bg-blue-950/60 text-blue-200 border-blue-800/70',
+  urgent: 'bg-amber-950/70 text-amber-200 border-amber-600/70 animate-pulse',
+};
 
-  const getProgressColor = (progress: number, status: string) => {
-    if (status === 'failed') return 'bg-rose-500';
-    if (progress >= 100) return 'bg-emerald-500';
-    if (progress > 50) return 'bg-gradient-to-r from-blue-500 to-indigo-500';
-    return 'bg-gradient-to-r from-cyan-400 to-blue-500';
+const progressStyles: Record<WorkItemStatus, string> = {
+  queued: 'from-slate-500 to-slate-400',
+  running: 'from-cyan-400 to-blue-500',
+  needs_approval: 'from-amber-300 to-orange-500',
+  blocked: 'from-rose-400 to-red-600',
+  in_review: 'from-violet-400 to-fuchsia-500',
+  completed: 'from-emerald-400 to-green-500',
+};
+
+const getColumnItems = (status: WorkItemStatus) => INITIAL_WORK_ITEMS.filter(item => item.status === status);
+
+const formatTimestamp = (value?: string) => {
+  if (!value) return '기록 없음';
+  const [, time = value] = value.split('T');
+  return time.replace('.000Z', '');
+};
+
+const getDependencyLabel = (item: WorkItem) => {
+  const dependencyCount = item.dependsOn.length;
+  const childCount = item.childIds.length;
+
+  if (dependencyCount === 0 && childCount === 0) return '의존관계 없음';
+  return `의존 ${dependencyCount} · 후속 ${childCount}`;
+};
+
+function WorkItemCard({
+  item,
+  isMockApproved,
+  onMockApprove,
+}: {
+  item: WorkItem;
+  isMockApproved: boolean;
+  onMockApprove: (workItemId: string) => void;
+}) {
+  const isApproval = item.status === 'needs_approval' || item.approvalRequired;
+  const isBlocked = item.status === 'blocked';
+  const isReview = item.status === 'in_review' || item.reviewRequired;
+  const highlightClass = isBlocked
+    ? 'border-rose-500/60 bg-rose-950/20 shadow-rose-950/30'
+    : isApproval
+      ? 'border-amber-400/60 bg-amber-950/20 shadow-amber-950/30'
+      : isReview
+        ? 'border-violet-500/50 bg-violet-950/20 shadow-violet-950/20'
+        : 'border-gray-800/80 bg-gray-900/45 shadow-gray-950/30';
+
+  return (
+    <motion.article
+      layout
+      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.97 }}
+      transition={{ duration: 0.2 }}
+      className={`relative overflow-hidden rounded-2xl border p-4 shadow-lg transition-all hover:border-indigo-400/50 ${highlightClass}`}
+    >
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-md border border-indigo-900/70 bg-indigo-950/40 px-1.5 py-0.5 font-mono text-[9px] font-bold text-indigo-200">
+              {item.externalId ?? item.id}
+            </span>
+            <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase ${priorityStyles[item.priority]}`}>
+              {item.priority}
+            </span>
+          </div>
+          <h3 className="text-sm font-bold leading-snug text-white">{item.title}</h3>
+        </div>
+        <span className="whitespace-nowrap rounded-full bg-gray-950/70 px-2 py-1 font-mono text-[9px] text-gray-400">
+          {WORK_CONSOLE_SUMMARY.statusLabels[item.status]}
+        </span>
+      </div>
+
+      {isMockApproved && (
+        <div className="mt-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-200">
+          로컬 mock 승인 표시됨 · 실제 Kanban/API/운영 작업 없음
+        </div>
+      )}
+
+      <p className="mt-2 text-xs leading-relaxed text-gray-400">{item.summary}</p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded-lg border border-gray-800 bg-gray-950/60 px-2 py-1 text-[10px] font-semibold text-gray-300">
+          <UserRoundCheck className="h-3.5 w-3.5 text-cyan-300" />
+          담당 {item.ownerProfile}
+        </span>
+        {item.assignedProfiles.map(profile => (
+          <span key={profile} className="rounded-lg border border-gray-800 bg-gray-900/80 px-2 py-1 font-mono text-[10px] text-gray-400">
+            {profile}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="inline-flex items-center gap-1 font-mono text-gray-500">
+            <TrendingUp className="h-3.5 w-3.5 text-cyan-400" />
+            진행률
+          </span>
+          <span className="font-mono font-bold text-gray-100">{item.progress}%</span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full border border-gray-900 bg-gray-950">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${item.progress}%` }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className={`h-full rounded-full bg-gradient-to-r ${progressStyles[item.status]}`}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 rounded-xl border border-gray-900 bg-gray-950/55 p-3 text-[10px]">
+        <div className="text-gray-400">
+          <span className="font-bold text-gray-600">현재: </span>
+          {item.currentStep}
+        </div>
+        <div className="text-indigo-200">
+          <span className="font-bold text-gray-600">다음 액션: </span>
+          {item.nextAction}
+        </div>
+        <div className="flex items-center gap-1 text-gray-500">
+          <GitBranch className="h-3.5 w-3.5" />
+          {getDependencyLabel(item)}
+        </div>
+      </div>
+
+      {(isApproval || isBlocked || isReview) && (
+        <div className={`mt-3 rounded-xl border p-2 text-[10px] ${isBlocked ? 'border-rose-500/30 bg-rose-950/30 text-rose-200' : isApproval ? 'border-amber-400/30 bg-amber-950/30 text-amber-200' : 'border-violet-500/30 bg-violet-950/30 text-violet-200'}`}>
+          <div className="flex items-center gap-1 font-bold">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {isBlocked ? '막힘 사유' : isApproval ? '승인 필요' : '검토 필요'}
+          </div>
+          <p className="mt-1 leading-relaxed">
+            {item.blockerReason ?? item.approvalLabel ?? '검토 완료 후 다음 단계로 이동합니다.'}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-between border-t border-gray-900/80 pt-3 text-[10px] text-gray-500">
+        <span>업데이트 {formatTimestamp(item.updatedAt)}</span>
+        <span>{item.source.toUpperCase()} ONLY</span>
+      </div>
+
+      {isApproval && (
+        <button
+          type="button"
+          onClick={() => onMockApprove(item.id)}
+          disabled={isMockApproved}
+          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-amber-400 px-3 py-2 text-[10px] font-black text-gray-950 transition-colors hover:bg-amber-300 disabled:cursor-default disabled:bg-emerald-400 disabled:text-gray-950"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          {isMockApproved ? '로컬 mock 표시 완료 — 실제 호출 없음' : '로컬 mock 승인 표시만 하기'}
+        </button>
+      )}
+    </motion.article>
+  );
+}
+
+export default function KanbanView() {
+  const [mockApprovedIds, setMockApprovedIds] = useState<string[]>([]);
+  const recentEvents = INITIAL_WORK_EVENTS.slice(-5).reverse();
+  const activeProfileCount = INITIAL_PROFILE_WORK_STATES.filter(profile => profile.status !== 'idle').length;
+  const handleMockApprove = (workItemId: string) => {
+    setMockApprovedIds(prev => (prev.includes(workItemId) ? prev : [...prev, workItemId]));
   };
 
   return (
     <div className="space-y-6">
-      {/* Title Header */}
-      <div className="bg-gray-900/60 p-6 rounded-2xl border border-gray-800 shadow-xl backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-indigo-400" />
-            Hermes 협업 워크플로우 칸반보드
-          </h1>
-          <p className="text-xs text-gray-400 mt-1">
-            각 전문 AI 프로필이 어떤 작업을 전담하여 실행하고 있는지 한눈에 관제하며, 진척 상태와 남은 예상 소요시간을 실시간 모니터링합니다.
-          </p>
+      <section className="rounded-2xl border border-gray-800 bg-gray-900/60 p-6 shadow-xl backdrop-blur-md">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="flex items-center gap-2 text-xl font-bold text-white">
+              <Cpu className="h-5 w-5 text-indigo-400" />
+              Work Status Board / Kanban 진화형
+            </h1>
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-gray-400">
+              대기·진행중·승인필요·막힘·검토중·완료 6개 컬럼으로 작업 카드 흐름을 보여줍니다.
+              이 화면은 {WORK_CONSOLE_SUMMARY.sourceLabel} 기반 mock 전용이며 실제 Kanban, session DB, gateway, API에는 연결하지 않습니다.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+            <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
+              <div className="font-mono text-lg font-black text-white">{INITIAL_WORK_ITEMS.length}</div>
+              <div className="text-gray-500">작업 카드</div>
+            </div>
+            <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
+              <div className="font-mono text-lg font-black text-cyan-200">{activeProfileCount}</div>
+              <div className="text-gray-500">프로필 상태</div>
+            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3">
+              <div className="font-mono text-lg font-black text-emerald-200">MOCK</div>
+              <div className="text-gray-500">연동 모드</div>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-400 font-mono bg-gray-950/40 border border-gray-800 px-3 py-1.5 rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-          <span>REAL-TIME PIPELINE ACTIVE</span>
-        </div>
-      </div>
 
-      {/* Kanban Board Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {columns.map(col => {
-          const colTasks = getTasksByColumn(col.id);
+        <div className="mt-5 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 text-xs text-indigo-100">
+          <div className="flex items-center gap-2 font-bold">
+            <Sparkles className="h-4 w-4 text-indigo-300" />
+            Phase 2 경계
+          </div>
+          <p className="mt-1 text-indigo-200/80">{WORK_CONSOLE_SUMMARY.phase2Notice}</p>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        {columns.map(column => {
+          const items = getColumnItems(column.id);
 
           return (
-            <div 
-              key={col.id} 
-              className="flex flex-col bg-gray-950/40 border border-gray-900 rounded-2xl p-4 min-h-[500px]"
-            >
-              {/* Column Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-gray-900/60 mb-4">
-                <div className="flex items-center gap-2">
-                  {col.icon}
-                  <span className="text-xs font-bold text-gray-200 uppercase tracking-wider">{col.title}</span>
+            <div key={column.id} className={`flex min-h-[560px] flex-col rounded-2xl border p-3 shadow-lg ${column.accentClass}`}>
+              <div className="mb-3 border-b border-white/10 pb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {column.icon}
+                    <span className="text-xs font-black uppercase tracking-wider">{column.title}</span>
+                  </div>
+                  <span className="rounded-full bg-gray-950/70 px-2 py-0.5 font-mono text-[10px] font-black text-white">
+                    {items.length}
+                  </span>
                 </div>
-                <span className="px-2 py-0.5 rounded-full bg-gray-900 text-gray-500 text-[10px] font-mono font-bold">
-                  {colTasks.length}
-                </span>
+                <p className="mt-1 text-[10px] leading-relaxed opacity-75">{column.helper}</p>
               </div>
 
-              {/* Task Cards Stack */}
-              <div className="space-y-3 flex-1 overflow-y-auto">
+              <div className="flex-1 space-y-3 overflow-y-auto pr-1">
                 <AnimatePresence mode="popLayout">
-                  {colTasks.length === 0 ? (
-                    <div className="h-28 border border-dashed border-gray-900 rounded-xl flex items-center justify-center text-xs text-gray-600 font-mono text-center px-4">
-                      작업 없음
+                  {items.length === 0 ? (
+                    <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-white/10 px-4 text-center text-xs opacity-60">
+                      {column.emptyText}
                     </div>
                   ) : (
-                    colTasks.map(task => (
-                      <motion.div
-                        key={task.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        transition={{ duration: 0.2 }}
-                        className={`bg-gray-900/40 border border-gray-800/80 p-4 rounded-xl hover:border-gray-700/60 transition-all shadow-md group relative overflow-hidden`}
-                      >
-                        {/* Task Card Header */}
-                        <div className="space-y-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-[9px] font-mono font-bold bg-indigo-950/40 text-indigo-300 border border-indigo-950 px-1.5 py-0.5 rounded">
-                              {task.id}
-                            </span>
-                            <span className="text-[10px] text-gray-500 font-mono">
-                              {task.updatedAt.slice(11)}
-                            </span>
-                          </div>
-                          <h3 className="text-xs font-bold text-gray-100 group-hover:text-indigo-400 transition-colors leading-snug">
-                            {task.title}
-                          </h3>
-                        </div>
-
-                        {/* Profiles / Owner Badge */}
-                        <div className="mt-3 flex flex-wrap items-center gap-1">
-                          <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wider mr-1">수행 에이전트:</span>
-                          {task.profiles.map(profile => (
-                            <span 
-                              key={profile} 
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-900 border border-gray-800 rounded-md text-[9px] font-mono font-medium text-gray-300"
-                            >
-                              <span className="w-1 h-1 rounded-full bg-cyan-400" />
-                              {profile}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Progress Bar Container */}
-                        <div className="mt-4 space-y-1.5">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-gray-500 font-mono flex items-center gap-1">
-                              <TrendingUp className="w-3.5 h-3.5 text-cyan-500" />
-                              진척도
-                            </span>
-                            <span className="font-bold text-white font-mono">{task.progress}%</span>
-                          </div>
-                          
-                          {/* Visual Progress Bar */}
-                          <div className="w-full bg-gray-950 h-1.5 rounded-full overflow-hidden border border-gray-900">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${task.progress}%` }}
-                              transition={{ duration: 0.5, ease: 'easeOut' }}
-                              className={`h-full rounded-full ${getProgressColor(task.progress, task.status)}`}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Estimated Time Remaining */}
-                        <div className="mt-3.5 pt-3 border-t border-gray-900/60 flex items-center justify-between text-[10px]">
-                          <span className="text-gray-500 font-mono flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-gray-400" />
-                            남은 시간
-                          </span>
-                          <span className={`font-semibold font-mono ${
-                            task.status === 'completed' ? 'text-emerald-400' :
-                            task.status === 'failed' ? 'text-rose-400' : 'text-cyan-300'
-                          }`}>
-                            {task.estimatedTime}
-                          </span>
-                        </div>
-
-                        {/* Action Details (Step descriptions) */}
-                        <div className="mt-3 bg-gray-950/60 p-2 rounded-lg space-y-1 border border-gray-950 text-[10px]">
-                          <div className="text-gray-400 truncate">
-                            <span className="text-gray-600 font-semibold mr-1">현재:</span>
-                            {task.currentStep}
-                          </div>
-                          {task.nextAction !== '없음' && (
-                            <div className="text-indigo-300 truncate">
-                              <span className="text-gray-600 font-semibold mr-1">다음:</span>
-                              {task.nextAction}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Needs Review Action button overlay */}
-                        {task.status === 'needs_review' && (
-                          <div className="mt-3 pt-2 border-t border-gray-900/40">
-                            <button
-                              onClick={() => onApproveTask(task.id)}
-                              className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-lg text-[10px] shadow-md shadow-amber-500/10 transition-all flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              <ShieldCheck className="w-3.5 h-3.5 stroke-[2.5]" />
-                              즉시 승인 수동 처리
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Failed status notice */}
-                        {task.status === 'failed' && (
-                          <div className="absolute top-2 right-2 p-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-md text-[8px] font-mono">
-                            ERROR BLOCKED
-                          </div>
-                        )}
-                      </motion.div>
+                    items.map(item => (
+                      <div key={item.id}>
+                        <WorkItemCard
+                          item={item}
+                          isMockApproved={mockApprovedIds.includes(item.id)}
+                          onMockApprove={handleMockApprove}
+                        />
+                      </div>
                     ))
                   )}
                 </AnimatePresence>
@@ -231,7 +340,53 @@ export default function KanbanView({ tasks, onApproveTask }: KanbanViewProps) {
             </div>
           );
         })}
-      </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1.2fr]">
+        <div className="rounded-2xl border border-gray-800 bg-gray-900/45 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+            <UserRoundCheck className="h-4 w-4 text-cyan-300" />
+            담당 프로필 현황
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {INITIAL_PROFILE_WORK_STATES.map(profile => (
+              <div key={profile.profileId} className="rounded-xl border border-gray-800 bg-gray-950/45 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-bold text-gray-100">{profile.displayName}</span>
+                  <span className="rounded-full border border-gray-800 px-2 py-0.5 text-[9px] text-gray-400">{profile.status}</span>
+                </div>
+                <p className="mt-1 text-[10px] leading-relaxed text-gray-500">{profile.currentAction}</p>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-gray-500">
+                  <span>queue {profile.queueDepth}</span>
+                  <span>blocked {profile.blockedCountToday}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-800 bg-gray-900/45 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+            <Layers3 className="h-4 w-4 text-indigo-300" />
+            최근 mock 이벤트
+          </div>
+          <div className="space-y-2">
+            {recentEvents.map(event => (
+              <div key={event.id} className="rounded-xl border border-gray-800 bg-gray-950/45 p-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-gray-100">{event.title}</span>
+                  <span className="font-mono text-[10px] text-gray-500">{formatTimestamp(event.timestamp)}</span>
+                </div>
+                <p className="mt-1 text-[10px] leading-relaxed text-gray-400">{event.message}</p>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-gray-600">
+                  <span>{event.actorProfile}{event.targetProfile ? ` → ${event.targetProfile}` : ''}</span>
+                  <span>{event.level}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
