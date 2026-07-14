@@ -22,6 +22,47 @@ export type WorkPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export type WorkSource = 'mock' | 'kanban' | 'gateway' | 'session' | 'mimir';
 
+export type WorkConsoleJobRunState = 'scheduled' | 'paused' | 'disabled' | 'unknown';
+
+export type WorkConsoleJobRunStatus = 'ok' | 'error' | 'unknown';
+
+export type WorkConsoleSourceFreshness = 'fresh' | 'stale' | 'missing' | 'unknown';
+
+export type WorkConsoleJobSourcePathKind = 'cron_jobs_json' | 'cron_output_dir' | 'legacy_flat_output' | 'fixture';
+
+export interface WorkConsoleJobOutputFixture {
+  jobId: string;
+  jobName: string;
+  jobState: WorkConsoleJobRunState;
+  enabled: boolean;
+  scheduleLabel: string;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  lastStatus?: WorkConsoleJobRunStatus;
+  outputText: string;
+  outputCreatedAt?: string;
+  sourcePathKind: WorkConsoleJobSourcePathKind;
+}
+
+export interface WorkConsoleJobRunSummary {
+  jobId: string;
+  jobName: string;
+  jobState: WorkConsoleJobRunState;
+  enabled: boolean;
+  scheduleLabel: string;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  lastStatus: WorkConsoleJobRunStatus;
+  latestOutputAt?: string;
+  latestOutputSizeBytes: number;
+  outputCount: number;
+  freshness: WorkConsoleSourceFreshness;
+  safeSummary: string;
+  riskFlags: string[];
+  redactionCount: number;
+  sourcePathKind: WorkConsoleJobSourcePathKind;
+}
+
 export type WorkArtifactRefType = 'comment' | 'file' | 'url' | 'diff' | 'report' | 'mimir_link';
 
 export interface WorkArtifactRef {
