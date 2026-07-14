@@ -14,7 +14,7 @@ import type {
 export const WORK_CONSOLE_SUMMARY: WorkConsoleSummary = {
   mode: 'mock',
   generatedAt: '2026-07-14T00:00:00.000Z',
-  sourceLabel: 'src/data/work-console/mockFixture.ts / mock-only adapter seed',
+  sourceLabel: 'Work Console mock-only adapter seed',
   statusLabels: {
     queued: '대기',
     running: '진행중',

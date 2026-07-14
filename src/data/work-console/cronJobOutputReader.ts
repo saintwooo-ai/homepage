@@ -13,7 +13,10 @@ import type {
   WorkConsoleJobRunSummary,
   WorkConsoleSourceFreshness,
 } from '../../types/workConsole';
-import { buildSafeCronSummary } from './cronOutputSanitizer';
+import { buildSafeCronDigest, sanitizeCronOutputText } from './cronOutputSanitizer';
+import { evaluateCronDomainPolicy } from './cronDomainPolicy';
+import { sanitizeCronMetadata } from './cronMetadataSanitizer';
+import { evaluateCronOwnerPolicy } from './cronOwnerPolicy';
 
 export interface CronJobOutputReaderOptions {
   readonly now?: string;
@@ -22,13 +25,38 @@ export interface CronJobOutputReaderOptions {
 
 const DEFAULT_FRESH_WITHIN_HOURS = 24;
 
+function normalizeSafeTimestamp(timestamp: string | undefined): string | undefined {
+  if (!timestamp) {
+    return undefined;
+  }
+
+  const trimmedTimestamp = timestamp.trim();
+  if (!trimmedTimestamp) {
+    return undefined;
+  }
+
+  const sanitizedTimestamp = sanitizeCronOutputText(trimmedTimestamp);
+  if (sanitizedTimestamp.redactionCount > 0 || sanitizedTimestamp.riskFlags.length > 0) {
+    return undefined;
+  }
+
+  const parsedTimestamp = Date.parse(trimmedTimestamp);
+  if (Number.isNaN(parsedTimestamp)) {
+    return undefined;
+  }
+
+  return new Date(parsedTimestamp).toISOString();
+}
+
 function getFreshness(outputCreatedAt: string | undefined, options: CronJobOutputReaderOptions): WorkConsoleSourceFreshness {
-  if (!outputCreatedAt) {
+  const safeOutputCreatedAt = normalizeSafeTimestamp(outputCreatedAt);
+  if (!safeOutputCreatedAt) {
     return 'missing';
   }
 
-  const nowMs = Date.parse(options.now ?? new Date().toISOString());
-  const outputMs = Date.parse(outputCreatedAt);
+  const safeNow = normalizeSafeTimestamp(options.now) ?? new Date().toISOString();
+  const nowMs = Date.parse(safeNow);
+  const outputMs = Date.parse(safeOutputCreatedAt);
 
   if (Number.isNaN(nowMs) || Number.isNaN(outputMs)) {
     return 'unknown';
@@ -42,24 +70,74 @@ export function summarizeCronJobOutputFixture(
   fixture: WorkConsoleJobOutputFixture,
   options: CronJobOutputReaderOptions = {},
 ): WorkConsoleJobRunSummary {
-  const safeSummary = buildSafeCronSummary(fixture.outputText);
-
-  return {
+  const safeSummary = buildSafeCronDigest(fixture.outputText);
+  const latestOutputSizeBytes = new TextEncoder().encode(fixture.outputText).length;
+  const safeMetadata = sanitizeCronMetadata({
     jobId: fixture.jobId,
     jobName: fixture.jobName,
+    scheduleLabel: fixture.scheduleLabel,
+    owner: fixture.owner,
+    domain: fixture.domain,
+    pausedReason: fixture.pausedReason,
+  });
+  const domainPolicy = evaluateCronDomainPolicy(safeMetadata.domain);
+  const ownerPolicy = evaluateCronOwnerPolicy(safeMetadata.owner);
+  const fixtureSourceVisible = fixture.sourcePathKind === 'fixture';
+  const policyReasons = [
+    ...domainPolicy.policyReasons,
+    ...ownerPolicy.policyReasons,
+    ...(fixtureSourceVisible ? [] : ['non_fixture_source_hidden']),
+  ];
+  const visible = domainPolicy.visible && ownerPolicy.visible && fixtureSourceVisible;
+  const riskFlags = [
+    ...new Set([...safeSummary.riskFlags, ...safeMetadata.riskFlags, ...(visible ? [] : ['hidden_by_policy'])]),
+  ].sort();
+
+  if (!visible) {
+    return {
+      jobId: 'hidden-job',
+      jobName: 'Hidden cron job',
+      jobState: 'unknown',
+      enabled: false,
+      scheduleLabel: 'schedule hidden',
+      visibility: 'hidden',
+      domainPolicy: domainPolicy.domainPolicy,
+      ownerPolicy: ownerPolicy.ownerPolicy,
+      policyReasons,
+      lastStatus: 'unknown',
+      latestOutputSizeBytes: 0,
+      outputCount: 0,
+      freshness: 'missing',
+      safeSummary: 'Hidden by policy.',
+      riskFlags,
+      redactionCount: safeSummary.redactionCount + safeMetadata.redactionCount,
+      sourcePathKind: fixture.sourcePathKind,
+    };
+  }
+
+  return {
+    jobId: safeMetadata.jobId,
+    jobName: safeMetadata.jobName,
     jobState: fixture.jobState,
     enabled: fixture.enabled,
-    scheduleLabel: fixture.scheduleLabel,
-    lastRunAt: fixture.lastRunAt,
-    nextRunAt: fixture.nextRunAt,
+    scheduleLabel: safeMetadata.scheduleLabel,
+    owner: safeMetadata.owner,
+    domain: safeMetadata.domain,
+    pausedReason: safeMetadata.pausedReason,
+    visibility: visible ? 'visible' : 'hidden',
+    domainPolicy: domainPolicy.domainPolicy,
+    ownerPolicy: ownerPolicy.ownerPolicy,
+    policyReasons,
+    lastRunAt: normalizeSafeTimestamp(fixture.lastRunAt),
+    nextRunAt: normalizeSafeTimestamp(fixture.nextRunAt),
     lastStatus: fixture.lastStatus ?? 'unknown',
-    latestOutputAt: fixture.outputCreatedAt,
-    latestOutputSizeBytes: fixture.outputText.length,
+    latestOutputAt: normalizeSafeTimestamp(fixture.outputCreatedAt),
+    latestOutputSizeBytes,
     outputCount: fixture.outputText ? 1 : 0,
     freshness: getFreshness(fixture.outputCreatedAt, options),
     safeSummary: safeSummary.safeText,
-    riskFlags: safeSummary.riskFlags,
-    redactionCount: safeSummary.redactionCount,
+    riskFlags,
+    redactionCount: safeSummary.redactionCount + safeMetadata.redactionCount,
     sourcePathKind: fixture.sourcePathKind,
   };
 }

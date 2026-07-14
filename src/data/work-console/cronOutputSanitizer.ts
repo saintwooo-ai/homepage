@@ -21,9 +21,9 @@ interface RedactionRule {
 
 const REDACTION_RULES: RedactionRule[] = [
   {
-    flag: 'webhook',
+    flag: 'external_callback_url',
     pattern: /https?:\/\/[^\s]*webhook[^\s]*/gi,
-    replacement: '[REDACTED_WEBHOOK_URL]',
+    replacement: '[REDACTED_URL]',
   },
   {
     flag: 'jwt',
@@ -73,8 +73,10 @@ const REDACTION_RULES: RedactionRule[] = [
 ];
 
 const MAX_INPUT_CHARS = 4_000;
-const MAX_SUMMARY_LINES = 2;
-const MAX_SUMMARY_CHARS = 240;
+
+function countNonEmptyLines(text: string): number {
+  return text.split(/\r?\n/).filter((line) => line.trim()).length;
+}
 
 export function sanitizeCronOutputText(rawText: string): WorkConsoleSanitizeResult {
   const truncatedInput = rawText.slice(0, MAX_INPUT_CHARS);
@@ -105,21 +107,19 @@ export function sanitizeCronOutputText(rawText: string): WorkConsoleSanitizeResu
   };
 }
 
-export function buildSafeCronSummary(rawText: string): WorkConsoleSanitizeResult {
+export function buildSafeCronDigest(rawText: string): WorkConsoleSanitizeResult {
   const result = sanitizeCronOutputText(rawText);
-  const lines = result.safeText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !line.startsWith('# Cron Job:'))
-    .filter((line) => !line.startsWith('**Job ID:**'))
-    .slice(0, MAX_SUMMARY_LINES);
-
-  const safeText = lines.join(' · ').slice(0, MAX_SUMMARY_CHARS);
+  const lineCount = countNonEmptyLines(rawText);
+  const byteCount = new TextEncoder().encode(rawText).length;
+  const flagText = result.riskFlags.length > 0 ? result.riskFlags.join(', ') : 'none';
 
   return {
-    safeText,
+    safeText: `Cron output received. Lines: ${lineCount}. Bytes: ${byteCount}. Sanitized risk flags: ${flagText}.`,
     riskFlags: result.riskFlags,
     redactionCount: result.redactionCount,
   };
+}
+
+export function buildSafeCronSummary(rawText: string): WorkConsoleSanitizeResult {
+  return buildSafeCronDigest(rawText);
 }

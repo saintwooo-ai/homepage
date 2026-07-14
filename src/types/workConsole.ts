@@ -28,6 +28,12 @@ export type WorkConsoleJobRunStatus = 'ok' | 'error' | 'unknown';
 
 export type WorkConsoleSourceFreshness = 'fresh' | 'stale' | 'missing' | 'unknown';
 
+export type WorkConsoleCronVisibility = 'visible' | 'hidden';
+
+export type WorkConsoleCronDomainPolicy = 'allowed' | 'denied' | 'unknown';
+
+export type WorkConsoleCronOwnerPolicy = 'allowed' | 'denied' | 'unknown';
+
 export type WorkConsoleJobSourcePathKind = 'cron_jobs_json' | 'cron_output_dir' | 'legacy_flat_output' | 'fixture';
 
 export interface WorkConsoleJobOutputFixture {
@@ -36,6 +42,9 @@ export interface WorkConsoleJobOutputFixture {
   jobState: WorkConsoleJobRunState;
   enabled: boolean;
   scheduleLabel: string;
+  owner?: string;
+  domain?: string;
+  pausedReason?: string;
   lastRunAt?: string;
   nextRunAt?: string;
   lastStatus?: WorkConsoleJobRunStatus;
@@ -50,6 +59,13 @@ export interface WorkConsoleJobRunSummary {
   jobState: WorkConsoleJobRunState;
   enabled: boolean;
   scheduleLabel: string;
+  owner?: string;
+  domain?: string;
+  pausedReason?: string;
+  visibility: WorkConsoleCronVisibility;
+  domainPolicy: WorkConsoleCronDomainPolicy;
+  ownerPolicy: WorkConsoleCronOwnerPolicy;
+  policyReasons: string[];
   lastRunAt?: string;
   nextRunAt?: string;
   lastStatus: WorkConsoleJobRunStatus;

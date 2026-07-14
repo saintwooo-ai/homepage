@@ -8,3 +8,6 @@ export * from './mockAdapter';
 export * from './liveHermesWorkConsoleAdapter';
 export * from './cronOutputSanitizer';
 export * from './cronJobOutputReader';
+export * from './cronMetadataSanitizer';
+export * from './cronDomainPolicy';
+export * from './cronOwnerPolicy';
