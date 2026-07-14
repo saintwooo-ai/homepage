@@ -4,11 +4,12 @@
  */
 
 import { GitBranch, Link2, ShieldAlert } from 'lucide-react';
-import { INITIAL_WORK_ITEMS, WORK_CONSOLE_SUMMARY } from '../data/mockWorkConsole';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console';
+import type { WorkConsoleSnapshot } from '../types/workConsole';
 
-const mimirPhase2Item = INITIAL_WORK_ITEMS.find((item) => item.kind === 'mimir_placeholder');
+export default function MimirPhase2Panel({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
+  const mimirPhase2Item = snapshot.workItems.find((item) => item.kind === 'mimir_placeholder');
 
-export default function MimirPhase2Panel() {
   return (
     <section id="mimir-phase-2-placeholder" className="rounded-2xl border border-violet-500/20 bg-violet-950/10 p-5 shadow-xl shadow-violet-950/10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -18,7 +19,7 @@ export default function MimirPhase2Panel() {
             Mimir Engine · Phase 2 Coming Next
           </h2>
           <p className="mt-2 text-xs leading-relaxed text-violet-100/75">
-            {WORK_CONSOLE_SUMMARY.phase2Notice}
+            {snapshot.summary.phase2Notice}
           </p>
           <p className="mt-2 text-[11px] leading-relaxed text-gray-400">
             이 영역은 지식 콘솔과 Mimir Engine 사이의 후속 연결 후보를 보여주는 placeholder입니다. 실제 Hermes session DB, gateway, API, log, websocket, Supabase migration/write는 호출하지 않습니다.

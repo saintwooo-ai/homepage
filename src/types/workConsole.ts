@@ -141,9 +141,39 @@ export interface AgentFlowStep {
 }
 
 export interface WorkConsoleSummary {
-  mode: 'mock';
+  mode: 'mock' | 'live-disabled';
   generatedAt: string;
   sourceLabel: string;
   statusLabels: Record<WorkItemStatus, string>;
   phase2Notice: string;
+}
+
+export type WorkConsoleSourceKind = 'mock-fixture' | 'hermes-live-disabled';
+
+export type WorkConsoleSourceConnectionState = 'fixture_ready' | 'disabled' | 'not_configured';
+
+export interface WorkConsoleSourceStatus {
+  kind: WorkConsoleSourceKind;
+  connectionState: WorkConsoleSourceConnectionState;
+  readOnly: true;
+  liveDisabled: boolean;
+  label: string;
+  message: string;
+  safetyNotes: string[];
+  checkedAt: string;
+}
+
+export interface WorkConsoleSnapshot {
+  summary: WorkConsoleSummary;
+  sourceStatus: WorkConsoleSourceStatus;
+  workItems: WorkItem[];
+  profileStates: ProfileWorkState[];
+  events: WorkEvent[];
+  agentFlow: AgentFlowStep[];
+}
+
+export interface WorkConsoleDataAdapter {
+  readonly id: string;
+  readonly label: string;
+  getSnapshot: () => WorkConsoleSnapshot;
 }

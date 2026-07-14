@@ -20,13 +20,8 @@ import {
   TrendingUp,
   UserRoundCheck,
 } from 'lucide-react';
-import {
-  INITIAL_PROFILE_WORK_STATES,
-  INITIAL_WORK_EVENTS,
-  INITIAL_WORK_ITEMS,
-  WORK_CONSOLE_SUMMARY,
-} from '../data/mockWorkConsole';
-import type { WorkItem, WorkItemStatus } from '../types/workConsole';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console';
+import type { WorkConsoleSnapshot, WorkItem, WorkItemStatus } from '../types/workConsole';
 
 interface WorkStatusColumn {
   id: WorkItemStatus;
@@ -104,7 +99,7 @@ const progressStyles: Record<WorkItemStatus, string> = {
   completed: 'from-emerald-400 to-green-500',
 };
 
-const getColumnItems = (status: WorkItemStatus) => INITIAL_WORK_ITEMS.filter(item => item.status === status);
+const getColumnItems = (workItems: WorkItem[], status: WorkItemStatus) => workItems.filter(item => item.status === status);
 
 const formatTimestamp = (value?: string) => {
   if (!value) return '기록 없음';
@@ -121,10 +116,12 @@ const getDependencyLabel = (item: WorkItem) => {
 };
 
 function WorkItemCard({
+  snapshot,
   item,
   isMockApproved,
   onMockApprove,
 }: {
+  snapshot: WorkConsoleSnapshot;
   item: WorkItem;
   isMockApproved: boolean;
   onMockApprove: (workItemId: string) => void;
@@ -163,7 +160,7 @@ function WorkItemCard({
           <h3 className="text-sm font-bold leading-snug text-white">{item.title}</h3>
         </div>
         <span className="whitespace-nowrap rounded-full bg-gray-950/70 px-2 py-1 font-mono text-[9px] text-gray-400">
-          {WORK_CONSOLE_SUMMARY.statusLabels[item.status]}
+          {snapshot.summary.statusLabels[item.status]}
         </span>
       </div>
 
@@ -238,6 +235,12 @@ function WorkItemCard({
       </div>
 
       {isApproval && (
+        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-950/20 p-2 text-[10px] leading-relaxed text-amber-100/80">
+          읽기 전용 화면입니다. 아래 버튼은 이 브라우저 안의 표시만 바꾸며 실제 승인, Kanban 변경, API 호출은 하지 않습니다.
+        </div>
+      )}
+
+      {isApproval && (
         <button
           type="button"
           onClick={() => onMockApprove(item.id)}
@@ -245,17 +248,17 @@ function WorkItemCard({
           className="mt-3 flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-amber-400 px-3 py-2 text-[10px] font-black text-gray-950 transition-colors hover:bg-amber-300 disabled:cursor-default disabled:bg-emerald-400 disabled:text-gray-950"
         >
           <ShieldCheck className="h-3.5 w-3.5" />
-          {isMockApproved ? '로컬 mock 표시 완료 — 실제 호출 없음' : '로컬 mock 승인 표시만 하기'}
+          {isMockApproved ? '브라우저 표시만 완료 — 실제 호출 없음' : '브라우저 표시만 바꾸기 · 실제 승인 아님'}
         </button>
       )}
     </motion.article>
   );
 }
 
-export default function KanbanView() {
+export default function KanbanView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
   const [mockApprovedIds, setMockApprovedIds] = useState<string[]>([]);
-  const recentEvents = INITIAL_WORK_EVENTS.slice(-5).reverse();
-  const activeProfileCount = INITIAL_PROFILE_WORK_STATES.filter(profile => profile.status !== 'idle').length;
+  const recentEvents = snapshot.events.slice(-5).reverse();
+  const activeProfileCount = snapshot.profileStates.filter(profile => profile.status !== 'idle').length;
   const handleMockApprove = (workItemId: string) => {
     setMockApprovedIds(prev => (prev.includes(workItemId) ? prev : [...prev, workItemId]));
   };
@@ -271,12 +274,12 @@ export default function KanbanView() {
             </h1>
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-gray-400">
               대기·진행중·승인필요·막힘·검토중·완료 6개 컬럼으로 작업 카드 흐름을 보여줍니다.
-              이 화면은 {WORK_CONSOLE_SUMMARY.sourceLabel} 기반 mock 전용이며 실제 Kanban, session DB, gateway, API에는 연결하지 않습니다.
+              이 화면은 {snapshot.summary.sourceLabel} 기반 read-only snapshot 전용이며 실제 Kanban, session DB, gateway, API에는 연결하지 않습니다.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
             <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-              <div className="font-mono text-lg font-black text-white">{INITIAL_WORK_ITEMS.length}</div>
+              <div className="font-mono text-lg font-black text-white">{snapshot.workItems.length}</div>
               <div className="text-gray-500">작업 카드</div>
             </div>
             <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
@@ -295,13 +298,13 @@ export default function KanbanView() {
             <Sparkles className="h-4 w-4 text-indigo-300" />
             Phase 2 경계
           </div>
-          <p className="mt-1 text-indigo-200/80">{WORK_CONSOLE_SUMMARY.phase2Notice}</p>
+          <p className="mt-1 text-indigo-200/80">{snapshot.summary.phase2Notice}</p>
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {columns.map(column => {
-          const items = getColumnItems(column.id);
+          const items = getColumnItems(snapshot.workItems, column.id);
 
           return (
             <div key={column.id} className={`flex min-h-[560px] flex-col rounded-2xl border p-3 shadow-lg ${column.accentClass}`}>
@@ -328,6 +331,7 @@ export default function KanbanView() {
                     items.map(item => (
                       <div key={item.id}>
                         <WorkItemCard
+                          snapshot={snapshot}
                           item={item}
                           isMockApproved={mockApprovedIds.includes(item.id)}
                           onMockApprove={handleMockApprove}
@@ -349,7 +353,7 @@ export default function KanbanView() {
             담당 프로필 현황
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            {INITIAL_PROFILE_WORK_STATES.map(profile => (
+            {snapshot.profileStates.map(profile => (
               <div key={profile.profileId} className="rounded-xl border border-gray-800 bg-gray-950/45 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-xs font-bold text-gray-100">{profile.displayName}</span>

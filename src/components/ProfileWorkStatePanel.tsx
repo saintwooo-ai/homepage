@@ -5,8 +5,8 @@
 
 import React from 'react';
 import { Activity, ArrowRight, Clock, FileText, ShieldCheck } from 'lucide-react';
-import { INITIAL_PROFILE_WORK_STATES } from '../data/mockWorkConsole';
-import type { ProfileWorkStatus } from '../types/workConsole';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console';
+import type { ProfileWorkStatus, WorkConsoleSnapshot } from '../types/workConsole';
 
 const statusCopy: Record<ProfileWorkStatus, { label: string; className: string }> = {
   idle: { label: '대기', className: 'border-gray-700 bg-gray-500/10 text-gray-300' },
@@ -19,7 +19,7 @@ const statusCopy: Record<ProfileWorkStatus, { label: string; className: string }
   error: { label: '오류', className: 'border-red-500/20 bg-red-500/10 text-red-200' },
 };
 
-export default function ProfileWorkStatePanel() {
+export default function ProfileWorkStatePanel({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
   return (
     <section className="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-5 shadow-xl shadow-cyan-950/10">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -29,16 +29,16 @@ export default function ProfileWorkStatePanel() {
             Profile Work State
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-cyan-100/70">
-            mock Work Console seed 기준으로 router/dev-pm/dev-architect/dev-builder/checker의 역할, 현재 초점, 상태, 출력 요약을 표시합니다.
+            WorkConsoleSnapshot 기준으로 router/dev-pm/dev-architect/dev-builder/checker의 역할, 현재 초점, 상태, 출력 요약을 표시합니다.
           </p>
         </div>
         <div className="rounded-xl border border-cyan-500/20 bg-black/20 px-3 py-2 text-[11px] font-bold text-cyan-200">
-          mock-only · live session/API/gateway 미연결
+          {snapshot.summary.mode} · live session/API/gateway 미연결
         </div>
       </div>
 
       <div className="grid gap-3 xl:grid-cols-5">
-        {INITIAL_PROFILE_WORK_STATES.map((profile) => {
+        {snapshot.profileStates.map((profile) => {
           const status = statusCopy[profile.status];
           return (
             <article key={profile.profileId} className="rounded-2xl border border-gray-800 bg-gray-950/60 p-4">

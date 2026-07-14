@@ -23,18 +23,13 @@ import {
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
-import {
-  INITIAL_PROFILE_WORK_STATES,
-  INITIAL_WORK_EVENTS,
-  INITIAL_WORK_ITEMS,
-  WORK_CONSOLE_SUMMARY,
-} from '../../data/mockWorkConsole';
+import { getWorkConsoleSnapshot } from '../../data/work-console';
 import AgentFlowTimelineView from '../AgentFlowTimelineView';
 import ApprovalBlockerPanel from '../ApprovalBlockerPanel';
 import KanbanView from '../KanbanView';
 import MimirPhase2Panel from '../MimirPhase2Panel';
 import ProfileWorkStatePanel from '../ProfileWorkStatePanel';
-import type { ProfileWorkState, WorkEvent, WorkItem, WorkItemStatus } from '../../types/workConsole';
+import type { ProfileWorkState, WorkConsoleSnapshot, WorkEvent, WorkItem, WorkItemStatus } from '../../types/workConsole';
 
 const STATUS_ORDER: WorkItemStatus[] = ['queued', 'running', 'needs_approval', 'blocked', 'in_review', 'completed'];
 
@@ -110,7 +105,7 @@ const getPriorityClass = (priority: WorkItem['priority']) => {
   }
 };
 
-function StatusSummaryCard({ status, count }: { status: WorkItemStatus; count: number }) {
+function StatusSummaryCard({ snapshot, status, count }: { snapshot: WorkConsoleSnapshot; status: WorkItemStatus; count: number }) {
   const style = STATUS_STYLE[status];
 
   return (
@@ -118,7 +113,7 @@ function StatusSummaryCard({ status, count }: { status: WorkItemStatus; count: n
       <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/5 blur-2xl" />
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-          {WORK_CONSOLE_SUMMARY.statusLabels[status] ?? style.label}
+          {snapshot.summary.statusLabels[status] ?? style.label}
         </span>
         <span className="rounded-xl bg-gray-950/45 p-2 border border-gray-800/60">
           {style.icon}
@@ -132,7 +127,7 @@ function StatusSummaryCard({ status, count }: { status: WorkItemStatus; count: n
   );
 }
 
-function WorkItemCard({ item, featured = false }: { item: WorkItem; featured?: boolean }) {
+function WorkItemCard({ snapshot, item, featured = false }: { snapshot: WorkConsoleSnapshot; item: WorkItem; featured?: boolean }) {
   const style = STATUS_STYLE[item.status];
 
   return (
@@ -149,7 +144,7 @@ function WorkItemCard({ item, featured = false }: { item: WorkItem; featured?: b
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-bold ${style.tone}`}>
               {style.icon}
-              {WORK_CONSOLE_SUMMARY.statusLabels[item.status]}
+              {snapshot.summary.statusLabels[item.status]}
             </span>
             <span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${getPriorityClass(item.priority)}`}>
               {item.priority.toUpperCase()}
@@ -299,10 +294,12 @@ function EventRow({ event }: { event: WorkEvent }) {
   );
 }
 
-export default function WorkConsoleView() {
-  const featuredWork = INITIAL_WORK_ITEMS.find(item => item.status === 'running') ?? INITIAL_WORK_ITEMS[0];
-  const activeWork = INITIAL_WORK_ITEMS.filter(item => item.status !== 'completed');
-  const reviewOrApprovalItems = INITIAL_WORK_ITEMS.filter(item => item.status === 'needs_approval' || item.status === 'in_review' || item.status === 'blocked');
+const DEFAULT_WORK_CONSOLE_SNAPSHOT = getWorkConsoleSnapshot();
+
+export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
+  const featuredWork = snapshot.workItems.find(item => item.status === 'running') ?? snapshot.workItems[0];
+  const activeWork = snapshot.workItems.filter(item => item.status !== 'completed');
+  const reviewOrApprovalItems = snapshot.workItems.filter(item => item.status === 'needs_approval' || item.status === 'in_review' || item.status === 'blocked');
 
   return (
     <div className="space-y-6">
@@ -324,7 +321,26 @@ export default function WorkConsoleView() {
               <Link2 className="h-4 w-4" />
               데이터 소스 경계
             </div>
-            <p className="mt-2 leading-5 text-cyan-100/75">{WORK_CONSOLE_SUMMARY.phase2Notice}</p>
+            <p className="mt-2 leading-5 text-cyan-100/75">{snapshot.summary.phase2Notice}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-5 shadow-xl shadow-emerald-950/10">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-emerald-100">
+              <ShieldAlert className="h-4 w-4 text-emerald-300" />
+              Source Status · {snapshot.sourceStatus.label}
+            </h2>
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-emerald-100/75">{snapshot.sourceStatus.message}</p>
+          </div>
+          <div className="grid gap-2 text-[10px] font-bold text-emerald-100 sm:grid-cols-3 lg:min-w-[520px]">
+            {snapshot.sourceStatus.safetyNotes.map(label => (
+              <span key={label} className="rounded-xl border border-emerald-500/20 bg-gray-950/50 px-3 py-2 text-center">
+                {label}
+              </span>
+            ))}
           </div>
         </div>
       </section>
@@ -351,16 +367,16 @@ export default function WorkConsoleView() {
       <section className="grid grid-cols-2 gap-4 xl:grid-cols-6">
         {STATUS_ORDER.map(status => (
           <div key={status}>
-            <StatusSummaryCard status={status} count={getStatusCount(INITIAL_WORK_ITEMS, status)} />
+            <StatusSummaryCard snapshot={snapshot} status={status} count={getStatusCount(snapshot.workItems, status)} />
           </div>
         ))}
       </section>
 
-      <ApprovalBlockerPanel summary={WORK_CONSOLE_SUMMARY} workItems={INITIAL_WORK_ITEMS} />
+      <ApprovalBlockerPanel summary={snapshot.summary} workItems={snapshot.workItems} />
 
-      <ProfileWorkStatePanel />
+      <ProfileWorkStatePanel snapshot={snapshot} />
 
-      <MimirPhase2Panel />
+      <MimirPhase2Panel snapshot={snapshot} />
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
         <div className="xl:col-span-8 space-y-4">
@@ -370,15 +386,15 @@ export default function WorkConsoleView() {
               <p className="mt-1 text-xs text-gray-500">진행/대기/승인필요/막힘/검토중 항목을 한 화면에서 확인합니다.</p>
             </div>
             <span className="rounded-full border border-gray-800 bg-gray-950/50 px-3 py-1 text-[10px] font-mono text-gray-500">
-              {WORK_CONSOLE_SUMMARY.sourceLabel}
+              {snapshot.summary.sourceLabel}
             </span>
           </div>
-          <WorkItemCard item={featuredWork} featured />
+          {featuredWork && <WorkItemCard snapshot={snapshot} item={featuredWork} featured />}
 
           <div className="grid gap-4 md:grid-cols-2">
             {reviewOrApprovalItems.map(item => (
               <div key={item.id}>
-                <WorkItemCard item={item} />
+                <WorkItemCard snapshot={snapshot} item={item} />
               </div>
             ))}
           </div>
@@ -396,7 +412,7 @@ export default function WorkConsoleView() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-xs font-semibold text-gray-200">{item.title}</span>
                     <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${STATUS_STYLE[item.status].tone}`}>
-                      {WORK_CONSOLE_SUMMARY.statusLabels[item.status]}
+                      {snapshot.summary.statusLabels[item.status]}
                     </span>
                   </div>
                   <div className="mt-2 flex items-center justify-between text-[10px] text-gray-500">
@@ -414,7 +430,7 @@ export default function WorkConsoleView() {
               최근 Work 이벤트
             </div>
             <div className="mt-4 space-y-3">
-              {INITIAL_WORK_EVENTS.slice(-5).reverse().map(event => (
+              {snapshot.events.slice(-5).reverse().map(event => (
                 <div key={event.id}>
                   <EventRow event={event} />
                 </div>
@@ -430,11 +446,11 @@ export default function WorkConsoleView() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-gray-200">프로필별 작업 상태</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {INITIAL_PROFILE_WORK_STATES.map(profile => (
+          {snapshot.profileStates.map(profile => (
             <div key={profile.profileId}>
               <ProfileStateCard
                 profile={profile}
-                activeItems={INITIAL_WORK_ITEMS.filter(item => profile.activeWorkItemIds.includes(item.id))}
+                activeItems={snapshot.workItems.filter(item => profile.activeWorkItemIds.includes(item.id))}
               />
             </div>
           ))}
@@ -442,11 +458,11 @@ export default function WorkConsoleView() {
       </section>
 
       <section className="rounded-2xl border border-gray-800 bg-gray-950/30 p-4">
-        <AgentFlowTimelineView />
+        <AgentFlowTimelineView snapshot={snapshot} />
       </section>
 
       <section className="rounded-2xl border border-gray-800 bg-gray-950/30 p-4">
-        <KanbanView />
+        <KanbanView snapshot={snapshot} />
       </section>
     </div>
   );

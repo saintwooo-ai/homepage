@@ -14,8 +14,8 @@ import {
   LockKeyhole,
   ShieldCheck,
 } from 'lucide-react';
-import { AGENT_FLOW_TIMELINE, WORK_CONSOLE_SUMMARY } from '../data/mockWorkConsole';
-import type { AgentFlowStep, WorkItemStatus } from '../types/workConsole';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console';
+import type { AgentFlowStep, WorkConsoleSnapshot, WorkItemStatus } from '../types/workConsole';
 
 const statusTone: Record<WorkItemStatus, { label: string; badge: string; card: string; dot: string; icon: ReactNode }> = {
   queued: {
@@ -121,7 +121,9 @@ function TimelineStepCard({ step, isLast }: { step: AgentFlowStep; isLast: boole
   );
 }
 
-export default function AgentFlowTimelineView() {
+export default function AgentFlowTimelineView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
+  const agentFlow = snapshot.agentFlow;
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-gray-800 bg-gray-900/60 p-6 shadow-xl backdrop-blur-md">
@@ -137,8 +139,8 @@ export default function AgentFlowTimelineView() {
             </p>
           </div>
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-xs text-cyan-100">
-            <div className="font-bold">{WORK_CONSOLE_SUMMARY.mode.toUpperCase()} ONLY</div>
-            <div className="mt-1 text-cyan-200/70">{WORK_CONSOLE_SUMMARY.sourceLabel}</div>
+            <div className="font-bold">{snapshot.summary.mode.toUpperCase()} ONLY</div>
+            <div className="mt-1 text-cyan-200/70">{snapshot.summary.sourceLabel}</div>
           </div>
         </div>
       </div>
@@ -146,19 +148,19 @@ export default function AgentFlowTimelineView() {
       <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">총 단계</div>
-          <div className="mt-2 font-mono text-3xl font-black text-white">{AGENT_FLOW_TIMELINE.length}</div>
+          <div className="mt-2 font-mono text-3xl font-black text-white">{agentFlow.length}</div>
         </div>
         <div className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300/70">승인필요</div>
-          <div className="mt-2 font-mono text-3xl font-black text-amber-200">{AGENT_FLOW_TIMELINE.filter((step) => step.status === 'needs_approval').length}</div>
+          <div className="mt-2 font-mono text-3xl font-black text-amber-200">{agentFlow.filter((step) => step.status === 'needs_approval').length}</div>
         </div>
         <div className="rounded-2xl border border-rose-500/20 bg-rose-950/10 p-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-rose-300/70">막힘</div>
-          <div className="mt-2 font-mono text-3xl font-black text-rose-200">{AGENT_FLOW_TIMELINE.filter((step) => step.status === 'blocked').length}</div>
+          <div className="mt-2 font-mono text-3xl font-black text-rose-200">{agentFlow.filter((step) => step.status === 'blocked').length}</div>
         </div>
         <div className="rounded-2xl border border-violet-500/20 bg-violet-950/10 p-4">
           <div className="text-[11px] font-bold uppercase tracking-wider text-violet-300/70">검토중</div>
-          <div className="mt-2 font-mono text-3xl font-black text-violet-200">{AGENT_FLOW_TIMELINE.filter((step) => step.status === 'in_review').length}</div>
+          <div className="mt-2 font-mono text-3xl font-black text-violet-200">{agentFlow.filter((step) => step.status === 'in_review').length}</div>
         </div>
       </div>
 
@@ -176,11 +178,11 @@ export default function AgentFlowTimelineView() {
         </div>
 
         <div>
-          {[...AGENT_FLOW_TIMELINE]
+          {[...agentFlow]
             .sort((a, b) => a.order - b.order)
             .map((step, index) => (
               <div key={step.id}>
-                <TimelineStepCard step={step} isLast={index === AGENT_FLOW_TIMELINE.length - 1} />
+                <TimelineStepCard step={step} isLast={index === agentFlow.length - 1} />
               </div>
             ))}
         </div>
@@ -190,7 +192,7 @@ export default function AgentFlowTimelineView() {
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            {WORK_CONSOLE_SUMMARY.phase2Notice} 이 화면의 승인필요/막힘/검토중 표시는 데모용 시각 구분이며 실제 운영 승인이나 작업 상태 변경을 수행하지 않습니다.
+            {snapshot.summary.phase2Notice} 이 화면의 승인필요/막힘/검토중 표시는 데모용 시각 구분이며 실제 운영 승인이나 작업 상태 변경을 수행하지 않습니다.
           </p>
         </div>
       </div>
