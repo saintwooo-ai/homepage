@@ -241,8 +241,8 @@ export const INITIAL_WORK_ITEMS: WorkItem[] = [
       {
         label: 'Architecture handoff',
         type: 'file',
-        path: '/opt/data/kanban/workspaces/t_8a20671e/work-console-v1-architecture.md',
-        description: '실제 파일 경로는 설계 산출물 참조용이며 v1 mock data는 읽기만 합니다.',
+        path: 'fixture://work-console/architecture-handoff.md',
+        description: '실제 내부 파일 경로를 노출하지 않는 fixture 전용 참조입니다.',
       },
     ],
   },

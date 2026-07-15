@@ -23,7 +23,7 @@ import {
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
-import { getWorkConsoleSnapshot } from '../../data/work-console';
+import { getDefaultWorkConsoleAdapter, getWorkConsoleSnapshot } from '../../data/work-console';
 import AgentFlowTimelineView from '../AgentFlowTimelineView';
 import ApprovalBlockerPanel from '../ApprovalBlockerPanel';
 import KanbanView from '../KanbanView';
@@ -294,7 +294,8 @@ function EventRow({ event }: { event: WorkEvent }) {
   );
 }
 
-const DEFAULT_WORK_CONSOLE_SNAPSHOT = getWorkConsoleSnapshot();
+const DEFAULT_WORK_CONSOLE_ADAPTER = getDefaultWorkConsoleAdapter();
+const DEFAULT_WORK_CONSOLE_SNAPSHOT = getWorkConsoleSnapshot(DEFAULT_WORK_CONSOLE_ADAPTER.adapter);
 
 export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
   const featuredWork = snapshot.workItems.find(item => item.status === 'running') ?? snapshot.workItems[0];
