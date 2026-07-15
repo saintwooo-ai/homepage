@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { getWorkConsoleSnapshot, mockWorkConsoleAdapter } from '../../data/work-console/browser';
+import { useLiveWorkStatus, type LiveWorkStatusConnection, type LiveWorkStatusPayload } from '../../liveWorkStatus';
 import AgentFlowTimelineView from '../AgentFlowTimelineView';
 import ApprovalBlockerPanel from '../ApprovalBlockerPanel';
 import KanbanView from '../KanbanView';
@@ -98,6 +99,159 @@ const formatMockTime = (timestamp?: string) => {
 };
 
 const getStatusCount = (items: WorkItem[], status: WorkItemStatus) => items.filter(item => item.status === status).length;
+
+const formatLiveDateTime = (timestamp?: string | null) => {
+  if (!timestamp) return '대기 중';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  return date.toLocaleString('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
+
+const getConnectionTone = (connection: LiveWorkStatusConnection) => {
+  switch (connection) {
+    case 'connected':
+      return {
+        label: 'CONNECTED',
+        badge: 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100',
+        dot: 'bg-emerald-300 shadow-emerald-400/60',
+      };
+    case 'stale':
+      return {
+        label: 'STALE',
+        badge: 'border-amber-400/40 bg-amber-400/15 text-amber-100',
+        dot: 'bg-amber-300 shadow-amber-400/60',
+      };
+    case 'error':
+      return {
+        label: 'ERROR',
+        badge: 'border-rose-400/40 bg-rose-400/15 text-rose-100',
+        dot: 'bg-rose-300 shadow-rose-400/60',
+      };
+    case 'loading':
+    default:
+      return {
+        label: 'LOADING',
+        badge: 'border-cyan-400/40 bg-cyan-400/15 text-cyan-100',
+        dot: 'bg-cyan-300 shadow-cyan-400/60',
+      };
+  }
+};
+
+function LiveWorkStatusPanel({ payload, connection, fetchedAt, sourceUrl, errorMessage }: {
+  payload: LiveWorkStatusPayload | null;
+  connection: LiveWorkStatusConnection;
+  fetchedAt: string | null;
+  sourceUrl: string;
+  errorMessage?: string;
+}) {
+  const tone = getConnectionTone(connection);
+  const events = payload?.events.slice(-4).reverse() ?? [];
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-950/40 via-gray-900/80 to-cyan-950/25 p-5 shadow-xl shadow-emerald-950/20">
+      <div className="absolute -right-14 -top-14 h-44 w-44 rounded-full bg-emerald-400/15 blur-3xl" />
+      <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black tracking-wider ${tone.badge}`}>
+              <span className={`h-2 w-2 rounded-full ${tone.dot} shadow-lg ${connection === 'connected' ? 'animate-pulse' : ''}`} />
+              LIVE WORK STATUS · {tone.label}
+            </span>
+            <span className="rounded-full border border-gray-700 bg-gray-950/50 px-3 py-1 font-mono text-[10px] text-gray-400">
+              polls safe public JSON every 5s
+            </span>
+          </div>
+
+          <h2 className="mt-4 text-xl font-black tracking-tight text-white">
+            {payload?.mission ?? '안전한 작업 상태를 불러오는 중'}
+          </h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-emerald-50/75">
+            {payload?.safeSummary ?? 'GitHub main의 public/work-status.json 또는 Vercel fallback에서 공개 가능한 작업 상태만 읽습니다.'}
+          </p>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-emerald-400/20 bg-gray-950/45 p-3">
+              <div className="font-mono text-[10px] uppercase text-emerald-300/70">active profile</div>
+              <div className="mt-1 text-sm font-bold text-white">{payload?.activeProfile ?? 'router'}</div>
+            </div>
+            <div className="rounded-xl border border-emerald-400/20 bg-gray-950/45 p-3">
+              <div className="font-mono text-[10px] uppercase text-emerald-300/70">phase</div>
+              <div className="mt-1 text-sm font-bold text-cyan-100">{payload?.phase ?? 'loading'}</div>
+            </div>
+            <div className="rounded-xl border border-emerald-400/20 bg-gray-950/45 p-3">
+              <div className="font-mono text-[10px] uppercase text-emerald-300/70">last update</div>
+              <div className="mt-1 text-sm font-bold text-emerald-100">{formatLiveDateTime(payload?.updatedAt)}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between font-mono text-[10px] text-gray-500">
+              <span>progress</span>
+              <span>{payload?.progress ?? 0}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full border border-emerald-500/20 bg-gray-950">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${payload?.progress ?? 0}%` }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="h-full rounded-full bg-gradient-to-r from-emerald-300 via-cyan-300 to-blue-400"
+              />
+            </div>
+          </div>
+        </div>
+
+        <aside className="relative w-full rounded-2xl border border-gray-800 bg-gray-950/55 p-4 xl:max-w-md">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-bold text-white">최근 실제 상태 이벤트</div>
+            <div className="font-mono text-[10px] text-gray-500">fetched {formatLiveDateTime(fetchedAt)}</div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {events.length > 0 ? events.map(event => (
+              <div key={event.id} className="rounded-xl border border-gray-800 bg-gray-900/60 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 font-mono text-[10px] text-cyan-200">
+                    {event.profile}
+                  </span>
+                  <span className="font-mono text-[10px] text-gray-600">{formatLiveDateTime(event.timestamp)}</span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-gray-300">{event.message}</p>
+              </div>
+            )) : (
+              <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-3 text-xs text-gray-500">이벤트를 불러오는 중입니다.</div>
+            )}
+          </div>
+          <div className="mt-3 rounded-xl border border-gray-800 bg-gray-950/60 p-3 text-[10px] leading-5 text-gray-500">
+            source: {sourceUrl}<br />
+            {payload?.supportingProfiles?.length ? `supporting: ${payload.supportingProfiles.join(' · ')}` : 'supporting: pending'}
+            {errorMessage ? <><br />error: {errorMessage}</> : null}
+          </div>
+        </aside>
+      </div>
+
+      <div className="relative mt-4 grid gap-2 text-[10px] font-bold text-emerald-100 sm:grid-cols-3 lg:grid-cols-6">
+        {[
+          ['readOnly', payload?.safety.readOnly],
+          ['publicSafeOnly', payload?.safety.publicSafeOnly],
+          ['rawLogsIncluded', payload?.safety.rawLogsIncluded],
+          ['hermesRuntimeRead', payload?.safety.hermesRuntimeRead],
+          ['gatewayRead', payload?.safety.gatewayRead],
+          ['cronRead', payload?.safety.cronRead],
+        ].map(([label, value]) => (
+          <span key={String(label)} className="rounded-xl border border-emerald-500/20 bg-gray-950/50 px-3 py-2 text-center">
+            {String(label)}={String(value ?? 'pending')}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 const getPriorityClass = (priority: WorkItem['priority']) => {
   switch (priority) {
@@ -376,23 +530,26 @@ function ServerSnapshotEnvelopePanel({ envelope }: { envelope?: WorkConsoleServe
 const DEFAULT_WORK_CONSOLE_SNAPSHOT = getWorkConsoleSnapshot(mockWorkConsoleAdapter);
 
 export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
+  const liveStatus = useLiveWorkStatus();
   const featuredWork = snapshot.workItems.find(item => item.status === 'running') ?? snapshot.workItems[0];
   const activeWork = snapshot.workItems.filter(item => item.status !== 'completed');
   const reviewOrApprovalItems = snapshot.workItems.filter(item => item.status === 'needs_approval' || item.status === 'in_review' || item.status === 'blocked');
 
   return (
     <div className="space-y-6">
+      <LiveWorkStatusPanel {...liveStatus} />
+
       <section className="relative overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/60 p-6 shadow-xl backdrop-blur-md">
         <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-mono font-bold uppercase tracking-widest text-cyan-400">
               <Activity className="h-4 w-4" />
-              Work Console / mock-only v1
+              Work Console / live status + mock-only dashboard v1
             </div>
             <h1 className="mt-3 text-2xl font-bold tracking-tight text-white">작업 흐름 대표 화면</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-              대표 작업, 프로필 상태, 승인/검토/막힘 요약을 mock 데이터로 표시합니다. 실제 Hermes session DB, gateway, API, websocket에는 연결하지 않습니다.
+              상단 Live Work Status는 공개 safe status JSON을 polling합니다. 아래 통합 대시보드와 Kanban은 아직 mock 데이터이며 실제 Hermes session DB, gateway, API, websocket에는 연결하지 않습니다.
             </p>
           </div>
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-xs text-cyan-200 lg:max-w-sm">

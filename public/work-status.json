@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "live-work-status.v0",
+  "mode": "safe-public-status",
+  "source": "router-manual-safe-status",
+  "status": "active",
+  "mission": "홈페이지 Work Console에서 Hermes 프로필 작업 상태가 보이도록 Live Work Status v0 구현",
+  "activeProfile": "router",
+  "supportingProfiles": [
+    "dev-pm",
+    "dev-builder",
+    "checker"
+  ],
+  "phase": "release-and-production-smoke",
+  "progress": 88,
+  "updatedAt": "2026-07-15T12:04:01.411Z",
+  "staleAfterSeconds": 900,
+  "safeSummary": "업무대장이 사용자 승인 후 공개 가능한 작업 상태만 Work Console에 표시하는 Live Work Status v0를 구현 중입니다.",
+  "currentAction": "로컬 preview smoke를 통과했고 GitHub main 반영 및 Vercel production 확인을 진행합니다.",
+  "nextAction": "production URL에서 Live Work Status 카드와 공개 safe status JSON 응답을 확인합니다.",
+  "safety": {
+    "readOnly": true,
+    "publicSafeOnly": true,
+    "rawLogsIncluded": false,
+    "privateIdsRedacted": true,
+    "tokensRemoved": true,
+    "hermesRuntimeRead": false,
+    "gatewayRead": false,
+    "cronRead": false,
+    "sessionDbRead": false,
+    "envRead": false
+  },
+  "events": [
+    {
+      "id": "evt-s18-001",
+      "timestamp": "2026-07-15T11:50:16.847Z",
+      "profile": "router",
+      "level": "info",
+      "message": "사용자가 실시간 Hermes 프로필 작업 상태 표시 목표를 승인했습니다."
+    },
+    {
+      "id": "evt-s18-002",
+      "timestamp": "2026-07-15T11:52:16.847Z",
+      "profile": "router",
+      "level": "info",
+      "message": "브라우저가 Hermes 내부를 직접 읽지 않는 공개 safe status polling 구조로 구현 범위를 확정했습니다."
+    },
+    {
+      "id": "evt-s18-003",
+      "timestamp": "2026-07-15T11:55:16.847Z",
+      "profile": "router",
+      "level": "success",
+      "message": "Live Work Status v0 UI와 verifier를 작성했습니다."
+    },
+    {
+      "id": "evt-s18-004",
+      "timestamp": "2026-07-15T11:59:16.847Z",
+      "profile": "router",
+      "level": "info",
+      "message": "검증, checker, GitHub main 반영, Vercel production 확인 단계로 이동합니다."
+    },
+    {
+      "id": "evt-s18-005",
+      "timestamp": "2026-07-15T12:04:01.411Z",
+      "profile": "router",
+      "level": "success",
+      "message": "로컬 build, dist leak scan, preview HTTP 200, work-status JSON smoke를 통과했습니다."
+    }
+  ]
+}

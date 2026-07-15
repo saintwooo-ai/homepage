@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "npm run verify:work-console-source-boundary && npm run verify:work-console-server-handoff-contract && npm run verify:work-console-server-collector-readiness && npm run verify:work-console-local-spike-scope && npm run verify:work-console-dummy-approval-evidence && npm run verify:work-console-stage4-review-packet && npm run verify:work-console-snapshot-policy && npm run verify:work-console-dummy-serializer && npm run verify:work-console-runtime-gate && vite build && npm run verify:work-console-dist-leak",
+    "build": "npm run verify:work-console-source-boundary && npm run verify:work-console-server-handoff-contract && npm run verify:work-console-server-collector-readiness && npm run verify:work-console-local-spike-scope && npm run verify:work-console-dummy-approval-evidence && npm run verify:work-console-stage4-review-packet && npm run verify:live-work-status && npm run verify:work-console-snapshot-policy && npm run verify:work-console-dummy-serializer && npm run verify:work-console-runtime-gate && vite build && npm run verify:work-console-dist-leak",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
@@ -18,6 +18,8 @@
     "verify:work-console-local-spike-scope": "tsx scripts/verify-work-console-local-spike-scope.ts",
     "verify:work-console-dummy-approval-evidence": "tsx scripts/verify-work-console-dummy-approval-evidence.ts",
     "verify:work-console-stage4-review-packet": "tsx scripts/verify-work-console-stage4-review-packet.ts",
+    "verify:live-work-status": "tsx scripts/verify-live-work-status.ts",
+    "update:live-work-status": "tsx scripts/update-live-work-status.ts",
     "verify:work-console-snapshot-policy": "tsx scripts/verify-work-console-snapshot-policy.ts",
     "verify:work-console-dummy-serializer": "tsx scripts/verify-work-console-dummy-serializer.ts",
     "verify:work-console-dist-leak": "tsx scripts/verify-work-console-dist-leak.ts"
