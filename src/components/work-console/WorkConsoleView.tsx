@@ -335,6 +335,9 @@ export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSH
               Source Status · {snapshot.sourceStatus.label}
             </h2>
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-emerald-100/75">{snapshot.sourceStatus.message}</p>
+            <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-emerald-200/70">
+              {snapshot.sourceStatus.liveConnection.statusMessage} Next phase: {snapshot.sourceStatus.liveConnection.nextPhase}.
+            </p>
           </div>
           <div className="grid gap-2 text-[10px] font-bold text-emerald-100 sm:grid-cols-3 lg:min-w-[520px]">
             {snapshot.sourceStatus.safetyNotes.map(label => (
@@ -343,6 +346,37 @@ export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSH
               </span>
             ))}
           </div>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
+            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Fixture mode</div>
+            <div className="mt-1 text-sm font-bold text-white">{snapshot.sourceStatus.liveConnection.fixtureMode ? 'Enabled' : 'Fallback only'}</div>
+          </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
+            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Live read</div>
+            <div className="mt-1 text-sm font-bold text-amber-200">Disabled</div>
+          </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
+            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Server handoff</div>
+            <div className="mt-1 text-sm font-bold text-amber-200">{snapshot.sourceStatus.serverHandoff.status.replace('_', ' ')}</div>
+          </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
+            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Production live</div>
+            <div className="mt-1 text-sm font-bold text-rose-200">Not approved</div>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {snapshot.sourceStatus.approvalGates.map(gate => (
+            <div key={gate.id} className="rounded-xl border border-gray-800 bg-gray-950/40 p-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-gray-100">{gate.label}</span>
+                <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${gate.status === 'blocked' ? 'bg-rose-500/10 text-rose-200' : gate.status === 'pending' ? 'bg-amber-500/10 text-amber-200' : 'bg-emerald-500/10 text-emerald-200'}`}>
+                  {gate.status}
+                </span>
+              </div>
+              <p className="mt-2 leading-5 text-gray-500">{gate.note}</p>
+            </div>
+          ))}
         </div>
       </section>
 

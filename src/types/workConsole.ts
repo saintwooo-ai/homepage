@@ -209,6 +209,40 @@ export type WorkConsoleSourceKind = 'mock-fixture' | 'hermes-live-disabled';
 
 export type WorkConsoleSourceConnectionState = 'fixture_ready' | 'disabled' | 'not_configured';
 
+export type WorkConsoleContractPhase =
+  | '3C-4-safe-contract'
+  | '3D-server-handoff-design'
+  | '3E-local-staging-spike'
+  | '3F-staging-integration'
+  | '3G-production-enable';
+
+export type WorkConsoleGateStatus = 'passed' | 'blocked' | 'pending';
+
+export interface WorkConsoleApprovalGateStatus {
+  id: string;
+  label: string;
+  status: WorkConsoleGateStatus;
+  requiredForPhase: WorkConsoleContractPhase;
+  note: string;
+}
+
+export interface WorkConsoleServerHandoffStatus {
+  required: boolean;
+  status: 'required' | 'not_required' | 'completed';
+  owner: 'server' | 'frontend' | 'router';
+  note: string;
+}
+
+export interface WorkConsoleLiveConnectionStatus {
+  fixtureMode: boolean;
+  liveReadDisabled: true;
+  serverHandoffRequired: boolean;
+  productionLiveApproved: false;
+  currentPhase: WorkConsoleContractPhase;
+  nextPhase: WorkConsoleContractPhase;
+  statusMessage: string;
+}
+
 export interface WorkConsoleSourceStatus {
   kind: WorkConsoleSourceKind;
   connectionState: WorkConsoleSourceConnectionState;
@@ -217,6 +251,9 @@ export interface WorkConsoleSourceStatus {
   label: string;
   message: string;
   safetyNotes: string[];
+  liveConnection: WorkConsoleLiveConnectionStatus;
+  serverHandoff: WorkConsoleServerHandoffStatus;
+  approvalGates: WorkConsoleApprovalGateStatus[];
   checkedAt: string;
 }
 

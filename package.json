@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "npm run verify:work-console-source-boundary && vite build && npm run verify:work-console-dist-leak",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "verify:work-console": "tsx scripts/verify-work-console-cron-fixtures.ts",
     "verify:work-console-policy": "tsx scripts/verify-work-console-cron-policy.ts",
     "verify:work-console-runtime-gate": "tsx scripts/verify-work-console-runtime-gate.ts",
+    "verify:work-console-source-boundary": "tsx scripts/verify-work-console-source-boundary.ts",
     "verify:work-console-dist-leak": "tsx scripts/verify-work-console-dist-leak.ts"
   },
   "dependencies": {

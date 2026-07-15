@@ -6,9 +6,23 @@
 
 import assert from 'node:assert/strict';
 import type { WorkConsoleJobOutputFixture } from '../src/types/workConsole';
-import { buildSafeCronSummary, summarizeCronJobOutputFixtures } from '../src/data/work-console';
+import { buildSafeCronSummary, createWorkConsoleAdapter, summarizeCronJobOutputFixtures } from '../src/data/work-console';
 
 const now = '2026-07-14T12:00:00.000Z';
+
+const defaultAdapter = createWorkConsoleAdapter();
+const defaultSnapshot = defaultAdapter.adapter.getSnapshot();
+assert.equal(defaultAdapter.adapter.id, 'mock-work-console-adapter');
+assert.equal(defaultAdapter.gate.source, 'fixture');
+assert.equal(defaultAdapter.gate.liveReadEnabled, false);
+assert.equal(defaultSnapshot.sourceStatus.connectionState, 'fixture_ready');
+assert.equal(defaultSnapshot.sourceStatus.liveConnection.fixtureMode, true);
+assert.equal(defaultSnapshot.sourceStatus.liveConnection.liveReadDisabled, true);
+assert.equal(defaultSnapshot.sourceStatus.liveConnection.productionLiveApproved, false);
+assert.equal(defaultSnapshot.sourceStatus.safetyNotes.includes('Fixture mode'), true);
+assert.equal(defaultSnapshot.sourceStatus.safetyNotes.includes('Live read disabled'), true);
+assert.equal(defaultSnapshot.sourceStatus.safetyNotes.includes('Server handoff required'), true);
+assert.equal(defaultSnapshot.sourceStatus.safetyNotes.includes('Production live connection not approved'), true);
 
 const fixtures: WorkConsoleJobOutputFixture[] = [
   {

@@ -31,6 +31,7 @@ export type WorkConsoleGateReason =
   | 'approval_scope_too_narrow'
   | 'read_only_boundary_unverified'
   | 'production_live_read_blocked'
+  | 'production_live_not_approved'
   | 'feature_flag_disabled'
   | 'write_capability_present'
   | 'network_capability_present'
@@ -127,6 +128,7 @@ export const evaluateWorkConsoleRuntimeGate = (
     if (!LIVE_APPROVAL_SCOPES.has(input.approval?.scope ?? 'none')) reasons.push('approval_scope_too_narrow');
     if (!input.readOnlyBoundaryVerified) reasons.push('read_only_boundary_unverified');
     if (input.runtimeMode === 'production') reasons.push('production_live_read_blocked');
+    reasons.push('production_live_not_approved');
     if (!input.featureFlagEnabled) reasons.push('feature_flag_disabled');
     if (input.writeCapabilityEnabled !== false) reasons.push('write_capability_present');
     if (input.networkCapabilityEnabled !== false) reasons.push('network_capability_present');
@@ -148,7 +150,7 @@ export const evaluateWorkConsoleRuntimeGate = (
     liveReadEnabled: false,
     adapterKind: 'disabled-live',
     reasons,
-    safeMessage: 'Work Console live cron read is blocked by the runtime gate. Fixture or disabled state must be shown instead.',
+    safeMessage: 'Work Console live cron read is blocked by the runtime gate. Production live connection not approved; fixture or disabled state must be shown instead.',
   };
 };
 

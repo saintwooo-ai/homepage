@@ -4,6 +4,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   createWorkConsoleAdapter,
   evaluateWorkConsoleRuntimeGate,
@@ -22,6 +23,15 @@ assert.equal(defaultAdapter.adapter.id, 'mock-work-console-adapter');
 assert.equal(defaultAdapter.gate.adapterKind, 'fixture');
 assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.connectionState, 'fixture_ready');
 assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.liveDisabled, true);
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.liveConnection.fixtureMode, true);
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.liveConnection.liveReadDisabled, true);
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.liveConnection.serverHandoffRequired, true);
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.liveConnection.productionLiveApproved, false);
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.liveConnection.currentPhase, '3C-4-safe-contract');
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.liveConnection.nextPhase, '3D-server-handoff-design');
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.serverHandoff.status, 'required');
+assert.equal(defaultAdapter.adapter.getSnapshot().sourceStatus.approvalGates.some(gate => gate.id === 'production-live-approval' && gate.status === 'blocked'), true);
+assert.equal(JSON.stringify(defaultAdapter.adapter.getSnapshot().sourceStatus).includes('Production live connection not approved'), true);
 
 const unknownAdapter = createWorkConsoleAdapter({ source: 'unexpected-live-source' });
 assert.equal(unknownAdapter.gate.state, 'blocked');
@@ -56,7 +66,9 @@ const designOnlyLiveAttempt = evaluateWorkConsoleRuntimeGate({
 assert.equal(designOnlyLiveAttempt.state, 'blocked');
 assert.equal(designOnlyLiveAttempt.liveReadEnabled, false);
 assert.equal(designOnlyLiveAttempt.reasons.includes('approval_scope_too_narrow'), true);
+assert.equal(designOnlyLiveAttempt.reasons.includes('production_live_not_approved'), true);
 assert.equal(designOnlyLiveAttempt.reasons.includes('live_cron_reader_not_implemented'), true);
+assert.equal(designOnlyLiveAttempt.safeMessage.includes('Production live connection not approved'), true);
 
 const allGatesButProduction = evaluateWorkConsoleRuntimeGate({
   source: 'local-cron-readonly',
@@ -84,6 +96,7 @@ const allGatesButProduction = evaluateWorkConsoleRuntimeGate({
 assert.equal(allGatesButProduction.state, 'blocked');
 assert.equal(allGatesButProduction.liveReadEnabled, false);
 assert.equal(allGatesButProduction.reasons.includes('production_live_read_blocked'), true);
+assert.equal(allGatesButProduction.reasons.includes('production_live_not_approved'), true);
 assert.equal(allGatesButProduction.reasons.includes('live_cron_reader_not_implemented'), true);
 
 const missingEverything = evaluateWorkConsoleRuntimeGate({
@@ -94,6 +107,7 @@ const requiredBlockers = [
   'missing_traceable_approval',
   'approval_scope_too_narrow',
   'read_only_boundary_unverified',
+  'production_live_not_approved',
   'feature_flag_disabled',
   'write_capability_present',
   'network_capability_present',
@@ -121,4 +135,20 @@ assert.equal(safeError.code, 'WORK_CONSOLE_SOURCE_BLOCKED');
 assert.equal(/Bearer|abc123|test@example\.com|\/private\/runtime|profiles\/router\/cron|jobs\.json|\.hermes|HERMES_GATEWAY_TOKEN|eyJabc|token=secret|1526570975141826681/.test(JSON.stringify(safeError)), false);
 assert.deepEqual(safeError.reasons, ['safe_error_policy_unverified', 'weird_reason_with_spaces']);
 
-console.log('Work Console Phase 3C-3 runtime gate verification passed');
+const contractDoc = readFileSync('docs/work-console-phase3c4-safe-contract-hardening.md', 'utf8');
+const requiredContractPhrases = [
+  'Final Goal',
+  'Phase 3C-4 safe contract',
+  '3D server handoff design',
+  '3E local/staging spike',
+  '3F staging integration',
+  '3G production enable',
+  'Production live connection not approved',
+  'Frontend direct VPS filesystem read is forbidden',
+  'server/runtime sanitized snapshot',
+];
+for (const phrase of requiredContractPhrases) {
+  assert.equal(contractDoc.includes(phrase), true, `contract doc missing ${phrase}`);
+}
+
+console.log('Work Console Phase 3C-4 runtime gate verification passed');

@@ -1,5 +1,5 @@
 /**
- * Phase 3C-3 build artifact leak scan.
+ * Phase 3C-4 build artifact leak scan.
  * Reads only local build artifacts under dist after `npm run build`.
  */
 
@@ -32,6 +32,12 @@ const forbiddenChecks: Array<{ label: string; pattern: RegExp }> = [
   { label: 'gateway-internal-hostname', pattern: /gateway[-_.]internal/i },
   { label: 'bearer-token-like', pattern: /bearer\s+[a-z0-9._-]{12,}/i },
   { label: 'webhook-url', pattern: /https?:\/\/[^\s"']*webhook[^\s"']*/i },
+  { label: 'hermes-env-var-name', pattern: /\bHERMES_[A-Z0-9_]+\b/ },
+  { label: 'work-console-live-env-name', pattern: /\bWORK_CONSOLE_[A-Z0-9_]*(?:LIVE|CRON|READER|SOURCE)[A-Z0-9_]*\b/ },
+  { label: 'explicit-secret-assignment', pattern: /\b(?:api[_-]?key|secret|password|token)[\s:=]+(?:live|prod|real)[a-z0-9._-]{8,}/i },
+  { label: 'jwt-like', pattern: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/ },
+  { label: 'private-key-block', pattern: /BEGIN\s+(?:RSA\s+|OPENSSH\s+|EC\s+)?PRIVATE\s+KEY/i },
+  { label: 'supabase-project-url', pattern: /https?:\/\/[a-z0-9-]+\.supabase\.co/i },
 ];
 
 const findings: string[] = [];
@@ -43,4 +49,16 @@ for (const file of files) {
 }
 
 assert.deepEqual(findings, [], `forbidden Work Console runtime strings in dist:\n${findings.join('\n')}`);
-console.log(`Work Console Phase 3C-3 dist leak scan passed (${files.length} files scanned)`);
+const contractChecks = [
+  { label: 'fixture-mode-visible', pattern: /Fixture mode/i },
+  { label: 'live-read-disabled-visible', pattern: /Live read disabled|Live read/i },
+  { label: 'server-handoff-visible', pattern: /Server handoff/i },
+  { label: 'production-not-approved-visible', pattern: /Production live connection not approved|Not approved/i },
+];
+
+const combinedBody = files.map(file => readFileSync(file, 'utf8')).join('\n');
+for (const check of contractChecks) {
+  assert.equal(check.pattern.test(combinedBody), true, `missing Work Console contract text in dist: ${check.label}`);
+}
+
+console.log(`Work Console Phase 3C-4 dist leak scan passed (${files.length} files scanned)`);
