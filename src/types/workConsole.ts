@@ -307,6 +307,47 @@ export interface WorkConsoleServerSnapshotEnvelope {
   approvalGates: WorkConsoleApprovalGateStatus[];
 }
 
+export type WorkConsoleSnapshotAudience = 'admin-internal';
+
+export type WorkConsoleCollectorState =
+  | 'disabled'
+  | 'not_approved'
+  | 'collecting'
+  | 'degraded'
+  | 'unavailable';
+
+export type WorkConsoleKillSwitchState = 'enabled' | 'disabled' | 'forced_disabled';
+
+export interface WorkConsoleSnapshotEndpointPolicy {
+  routeImplemented: boolean;
+  adminOnly: boolean;
+  publicAccess: boolean;
+  cacheHeader: 'no-store';
+  authBoundary: 'admin-session-or-internal-relay';
+}
+
+export interface WorkConsoleSnapshotFreshnessPolicy {
+  maxFreshAgeSeconds: number;
+  maxStaleFallbackSeconds: number;
+  allowStaleFallback: boolean;
+  allowSharedCache: boolean;
+}
+
+export interface WorkConsoleSnapshotKillSwitchPolicy {
+  state: WorkConsoleKillSwitchState;
+  serverSideRequired: boolean;
+  clientFallbackOnly: boolean;
+  safeMessage: string;
+}
+
+export interface WorkConsoleServerSnapshotPolicyEnvelope extends WorkConsoleServerSnapshotEnvelope {
+  audience: WorkConsoleSnapshotAudience;
+  collectorState: WorkConsoleCollectorState;
+  endpointPolicy: WorkConsoleSnapshotEndpointPolicy;
+  freshnessPolicy: WorkConsoleSnapshotFreshnessPolicy;
+  killSwitch: WorkConsoleSnapshotKillSwitchPolicy;
+}
+
 export interface WorkConsoleSnapshot {
   summary: WorkConsoleSummary;
   sourceStatus: WorkConsoleSourceStatus;
