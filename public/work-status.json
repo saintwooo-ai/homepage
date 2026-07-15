@@ -10,13 +10,13 @@
     "dev-builder",
     "checker"
   ],
-  "phase": "release-and-production-smoke",
-  "progress": 88,
-  "updatedAt": "2026-07-15T12:04:01.411Z",
+  "phase": "production-smoke-complete",
+  "progress": 100,
+  "updatedAt": "2026-07-15T12:09:38.280155Z",
   "staleAfterSeconds": 900,
   "safeSummary": "업무대장이 사용자 승인 후 공개 가능한 작업 상태만 Work Console에 표시하는 Live Work Status v0를 구현 중입니다.",
-  "currentAction": "로컬 preview smoke를 통과했고 GitHub main 반영 및 Vercel production 확인을 진행합니다.",
-  "nextAction": "production URL에서 Live Work Status 카드와 공개 safe status JSON 응답을 확인합니다.",
+  "currentAction": "Vercel production 배포와 ugnas.vercel.app smoke 확인을 완료했습니다.",
+  "nextAction": "다음 단계는 Hermes profile heartbeat/event collector를 별도 승인 후 read-only로 연결하는 것입니다.",
   "safety": {
     "readOnly": true,
     "publicSafeOnly": true,
@@ -64,6 +64,13 @@
       "profile": "router",
       "level": "success",
       "message": "로컬 build, dist leak scan, preview HTTP 200, work-status JSON smoke를 통과했습니다."
+    },
+    {
+      "id": "evt-s18-006",
+      "timestamp": "2026-07-15T12:09:38.280155Z",
+      "profile": "router",
+      "level": "success",
+      "message": "GitHub main push, Vercel READY/PROMOTED, ugnas.vercel.app 및 /work-status.json HTTP 200 smoke 확인을 완료했습니다."
     }
   ]
 }
