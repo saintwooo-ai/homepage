@@ -3,20 +3,20 @@
   "mode": "safe-public-status",
   "source": "router-manual-safe-status",
   "status": "active",
-  "mission": "홈페이지 Work Console에서 Hermes 프로필 작업 상태가 보이도록 Live Work Status v0 구현",
+  "mission": "Work Console을 AI 팀 작업 현황판으로 단순화",
   "activeProfile": "router",
   "supportingProfiles": [
     "dev-pm",
     "dev-builder",
     "checker"
   ],
-  "phase": "production_risk_hardening_complete",
+  "phase": "ux_simplification_ready_for_demo",
   "progress": 100,
-  "updatedAt": "2026-07-15T12:15:46.805503Z",
+  "updatedAt": "2026-07-15T12:41:44.517279Z",
   "staleAfterSeconds": 900,
-  "safeSummary": "Vercel의 /work-status.json에서 공개 가능한 작업 상태만 30초 간격으로 읽어 보여주는 v0입니다. Hermes runtime/session DB/gateway/cron live 연결은 아직 아닙니다.",
-  "currentAction": "GitHub API 5초 polling 리스크를 제거하고, Vercel-served safe JSON 우선 polling과 event/safety schema 검증을 강화했습니다.",
-  "nextAction": "다음 단계는 별도 승인 후 profile heartbeat/event collector를 read-only sanitizer 뒤에 연결하는 것입니다.",
+  "safeSummary": "Work Console은 현재 작업, 담당 프로필, 막힘/다음 액션을 우선 보여주는 사용자용 AI 팀 작업 현황판입니다. 개발용 mock 상세는 접힘 영역으로 이동했습니다.",
+  "currentAction": "사용자 지적을 반영해 정보 과밀 화면을 시연용 핵심 현황판으로 정리했습니다.",
+  "nextAction": "Vercel 배포 후 ugnas.vercel.app에서 화면과 work-status.json smoke를 확인합니다.",
   "safety": {
     "readOnly": true,
     "publicSafeOnly": true,
@@ -30,34 +30,6 @@
     "envRead": false
   },
   "events": [
-    {
-      "id": "evt-s18-001",
-      "timestamp": "2026-07-15T11:50:16.847Z",
-      "profile": "router",
-      "level": "info",
-      "message": "사용자가 실시간 Hermes 프로필 작업 상태 표시 목표를 승인했습니다."
-    },
-    {
-      "id": "evt-s18-002",
-      "timestamp": "2026-07-15T11:52:16.847Z",
-      "profile": "router",
-      "level": "info",
-      "message": "브라우저가 Hermes 내부를 직접 읽지 않는 공개 safe status polling 구조로 구현 범위를 확정했습니다."
-    },
-    {
-      "id": "evt-s18-003",
-      "timestamp": "2026-07-15T11:55:16.847Z",
-      "profile": "router",
-      "level": "success",
-      "message": "Live Work Status v0 UI와 verifier를 작성했습니다."
-    },
-    {
-      "id": "evt-s18-004",
-      "timestamp": "2026-07-15T11:59:16.847Z",
-      "profile": "router",
-      "level": "info",
-      "message": "검증, checker, GitHub main 반영, Vercel production 확인 단계로 이동합니다."
-    },
     {
       "id": "evt-s18-005",
       "timestamp": "2026-07-15T12:04:01.411Z",
@@ -85,6 +57,13 @@
       "profile": "router",
       "level": "success",
       "message": "Vercel /work-status.json 우선, raw GitHub fallback, 30초 polling, event schema 강화로 보강했습니다."
+    },
+    {
+      "id": "event-ux-simplification-complete",
+      "timestamp": "2026-07-15T12:41:44.517279Z",
+      "profile": "router",
+      "level": "success",
+      "message": "Work Console 사용자용 정보구조 단순화와 개발자 상세 접힘 처리를 완료했습니다."
     }
   ]
 }

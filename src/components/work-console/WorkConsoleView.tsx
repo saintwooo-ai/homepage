@@ -539,170 +539,84 @@ export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSH
     <div className="space-y-6">
       <LiveWorkStatusPanel {...liveStatus} />
 
-      <section className="relative overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/60 p-6 shadow-xl backdrop-blur-md">
+      <section className="relative overflow-hidden rounded-2xl border border-cyan-500/20 bg-gray-900/70 p-6 shadow-xl backdrop-blur-md">
         <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-mono font-bold uppercase tracking-widest text-cyan-400">
-              <Activity className="h-4 w-4" />
-              Work Console / live status + mock-only dashboard v1
-            </div>
-            <h1 className="mt-3 text-2xl font-bold tracking-tight text-white">작업 흐름 대표 화면</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-              상단 Live Work Status는 공개 safe status JSON을 polling합니다. 아래 통합 대시보드와 Kanban은 아직 mock 데이터이며 실제 Hermes session DB, gateway, API, websocket에는 연결하지 않습니다.
-            </p>
+        <div className="relative">
+          <div className="flex items-center gap-2 text-[11px] font-mono font-bold uppercase tracking-widest text-cyan-400">
+            <Activity className="h-4 w-4" />
+            Work Console / AI 팀 작업 현황판
           </div>
-          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-xs text-cyan-200 lg:max-w-sm">
-            <div className="flex items-center gap-2 font-bold">
-              <Link2 className="h-4 w-4" />
-              데이터 소스 경계
-            </div>
-            <p className="mt-2 leading-5 text-cyan-100/75">{snapshot.summary.phase2Notice}</p>
-          </div>
+          <h1 className="mt-3 text-2xl font-bold tracking-tight text-white">지금 AI 팀이 무슨 일을 하는지 보는 화면</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
+            이 화면의 핵심은 딱 세 가지입니다. <span className="text-cyan-100">현재 작업</span>, <span className="text-cyan-100">담당 프로필</span>, <span className="text-cyan-100">막힘/다음 액션</span>을 한눈에 보여줍니다.
+            개발용 mock dashboard와 안전 게이트 상세는 아래 접힘 영역으로 내렸습니다.
+          </p>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-5 shadow-xl shadow-emerald-950/10">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-emerald-100">
-              <ShieldAlert className="h-4 w-4 text-emerald-300" />
-              Source Status · {snapshot.sourceStatus.label}
-            </h2>
-            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-emerald-100/75">{snapshot.sourceStatus.message}</p>
-            <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-emerald-200/70">
-              {snapshot.sourceStatus.liveConnection.statusMessage} Next phase: {snapshot.sourceStatus.liveConnection.nextPhase}.
-            </p>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-blue-500/20 bg-blue-950/10 p-5">
+          <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-blue-100">
+            <PlayCircle className="h-4 w-4 text-blue-300" />
+            1. 현재 대표 작업
           </div>
-          <div className="grid gap-2 text-[10px] font-bold text-emerald-100 sm:grid-cols-3 lg:min-w-[520px]">
-            {snapshot.sourceStatus.safetyNotes.map(label => (
-              <span key={label} className="rounded-xl border border-emerald-500/20 bg-gray-950/50 px-3 py-2 text-center">
-                {label}
-              </span>
+          <h2 className="mt-3 text-lg font-bold text-white">{liveStatus.payload?.mission ?? featuredWork?.title ?? '작업 상태 확인 중'}</h2>
+          <p className="mt-2 text-sm leading-6 text-gray-400">{liveStatus.payload?.currentAction ?? featuredWork?.summary ?? '현재 작업을 불러오고 있습니다.'}</p>
+          <div className="mt-4 h-2 overflow-hidden rounded-full border border-blue-500/20 bg-gray-950">
+            <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-cyan-300" style={{ width: `${liveStatus.payload?.progress ?? featuredWork?.progress ?? 0}%` }} />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-violet-500/20 bg-violet-950/10 p-5">
+          <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-violet-100">
+            <Bot className="h-4 w-4 text-violet-300" />
+            2. 담당 프로필
+          </div>
+          <div className="mt-3 rounded-xl border border-violet-500/20 bg-gray-950/45 p-3">
+            <div className="font-mono text-[10px] uppercase text-violet-300/70">active</div>
+            <div className="mt-1 text-lg font-bold text-white">{liveStatus.payload?.activeProfile ?? featuredWork?.ownerProfile ?? 'router'}</div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(liveStatus.payload?.supportingProfiles?.length ? liveStatus.payload.supportingProfiles : snapshot.profileStates.slice(0, 4).map(profile => profile.profileId)).map(profile => (
+              <span key={profile} className="rounded-full border border-violet-500/20 bg-gray-950/50 px-3 py-1 text-xs font-bold text-violet-100">{profile}</span>
             ))}
           </div>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
-            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Fixture mode</div>
-            <div className="mt-1 text-sm font-bold text-white">{snapshot.sourceStatus.liveConnection.fixtureMode ? 'Enabled' : 'Fallback only'}</div>
-          </div>
-          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
-            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Live read</div>
-            <div className="mt-1 text-sm font-bold text-amber-200">Disabled</div>
-          </div>
-          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
-            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Server handoff</div>
-            <div className="mt-1 text-sm font-bold text-amber-200">{snapshot.sourceStatus.serverHandoff.status.replace('_', ' ')}</div>
-          </div>
-          <div className="rounded-xl border border-emerald-500/20 bg-gray-950/45 p-3">
-            <div className="font-mono text-[10px] uppercase text-emerald-300/70">Production live</div>
-            <div className="mt-1 text-sm font-bold text-rose-200">Not approved</div>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          {snapshot.sourceStatus.approvalGates.map(gate => (
-            <div key={gate.id} className="rounded-xl border border-gray-800 bg-gray-950/40 p-3 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-gray-100">{gate.label}</span>
-                <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${gate.status === 'blocked' ? 'bg-rose-500/10 text-rose-200' : gate.status === 'pending' ? 'bg-amber-500/10 text-amber-200' : 'bg-emerald-500/10 text-emerald-200'}`}>
-                  {gate.status}
-                </span>
-              </div>
-              <p className="mt-2 leading-5 text-gray-500">{gate.note}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      <ServerSnapshotEnvelopePanel envelope={snapshot.sourceStatus.serverSnapshotEnvelope} />
-
-      <section className="rounded-2xl border border-indigo-500/20 bg-indigo-950/10 p-5 shadow-xl shadow-indigo-950/10">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-sm font-black uppercase tracking-wider text-indigo-100">통합 Work Console 섹션 맵</h2>
-            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-indigo-100/70">
-              아래 한 화면 안에서 상태 요약, 승인/막힘, 프로필 작업 상태, Mimir Phase 2 placeholder, Agent Flow Timeline, 6컬럼 Kanban 보드를 모두 확인합니다.
-              모든 섹션은 동일한 mock seed만 읽으며 실제 Hermes session DB, gateway, API, websocket, Supabase write는 수행하지 않습니다.
-            </p>
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-5">
+          <div className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-amber-100">
+            <ShieldAlert className="h-4 w-4 text-amber-300" />
+            3. 막힘 / 다음 액션
           </div>
-          <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-indigo-100 sm:grid-cols-3 lg:min-w-[420px]">
-            {['상태 요약', '승인/막힘', 'Profile Work State', 'Mimir Phase 2', 'Agent Flow Timeline', 'Kanban Board'].map(label => (
-              <span key={label} className="rounded-xl border border-indigo-500/20 bg-gray-950/50 px-3 py-2 text-center">
-                {label}
-              </span>
-            ))}
+          <p className="mt-3 text-sm leading-6 text-gray-300">{liveStatus.payload?.nextAction ?? '다음 액션을 확인 중입니다.'}</p>
+          <div className="mt-3 rounded-xl border border-amber-500/20 bg-gray-950/45 p-3 text-xs leading-5 text-amber-100/80">
+            실제 Hermes runtime/session DB/gateway/cron 연결은 아직 승인 전입니다. 지금은 공개 safe status만 표시합니다.
           </div>
         </div>
       </section>
-
-      <section className="grid grid-cols-2 gap-4 xl:grid-cols-6">
-        {STATUS_ORDER.map(status => (
-          <div key={status}>
-            <StatusSummaryCard snapshot={snapshot} status={status} count={getStatusCount(snapshot.workItems, status)} />
-          </div>
-        ))}
-      </section>
-
-      <ApprovalBlockerPanel summary={snapshot.summary} workItems={snapshot.workItems} />
-
-      <ProfileWorkStatePanel snapshot={snapshot} />
-
-      <MimirPhase2Panel snapshot={snapshot} />
 
       <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
         <div className="xl:col-span-8 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-200">현재 진행 중 대표 작업</h2>
-              <p className="mt-1 text-xs text-gray-500">진행/대기/승인필요/막힘/검토중 항목을 한 화면에서 확인합니다.</p>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-200">대표 작업 카드</h2>
+              <p className="mt-1 text-xs text-gray-500">시연에서는 이 카드와 상단 Live Status만 보면 됩니다.</p>
             </div>
             <span className="rounded-full border border-gray-800 bg-gray-950/50 px-3 py-1 text-[10px] font-mono text-gray-500">
               {snapshot.summary.sourceLabel}
             </span>
           </div>
           {featuredWork && <WorkItemCard snapshot={snapshot} item={featuredWork} featured />}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {reviewOrApprovalItems.map(item => (
-              <div key={item.id}>
-                <WorkItemCard snapshot={snapshot} item={item} />
-              </div>
-            ))}
-          </div>
         </div>
 
         <aside className="xl:col-span-4 space-y-4">
           <div className="rounded-2xl border border-gray-800/80 bg-gray-900/40 p-5 shadow-lg">
             <div className="flex items-center gap-2 text-sm font-bold text-white">
-              <Layers3 className="h-4 w-4 text-indigo-400" />
-              진행 대기열
-            </div>
-            <div className="mt-4 space-y-3">
-              {activeWork.slice(0, 5).map(item => (
-                <div key={item.id} className="rounded-xl border border-gray-800 bg-gray-950/35 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs font-semibold text-gray-200">{item.title}</span>
-                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${STATUS_STYLE[item.status].tone}`}>
-                      {snapshot.summary.statusLabels[item.status]}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-[10px] text-gray-500">
-                    <span>{item.ownerProfile}</span>
-                    <span>{item.progress}%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-gray-800/80 bg-gray-900/40 p-5 shadow-lg">
-            <div className="flex items-center gap-2 text-sm font-bold text-white">
               <GitBranch className="h-4 w-4 text-cyan-400" />
-              최근 Work 이벤트
+              최근 이벤트
             </div>
             <div className="mt-4 space-y-3">
-              {snapshot.events.slice(-5).reverse().map(event => (
+              {snapshot.events.slice(-4).reverse().map(event => (
                 <div key={event.id}>
                   <EventRow event={event} />
                 </div>
@@ -712,30 +626,52 @@ export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSH
         </aside>
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-cyan-400" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-200">프로필별 작업 상태</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {snapshot.profileStates.map(profile => (
-            <div key={profile.profileId}>
-              <ProfileStateCard
-                profile={profile}
-                activeItems={snapshot.workItems.filter(item => profile.activeWorkItemIds.includes(item.id))}
-              />
+      <details className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+        <summary className="cursor-pointer select-none text-sm font-bold text-gray-200">
+          개발자용 상세 보기 · mock dashboard / safety gates / Kanban
+        </summary>
+        <div className="mt-5 space-y-6">
+          <section className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-5 shadow-xl shadow-emerald-950/10">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-emerald-100">
+                  <ShieldAlert className="h-4 w-4 text-emerald-300" />
+                  Source Status · {snapshot.sourceStatus.label}
+                </h2>
+                <p className="mt-2 max-w-3xl text-xs leading-relaxed text-emerald-100/75">{snapshot.sourceStatus.message}</p>
+              </div>
+              <div className="grid gap-2 text-[10px] font-bold text-emerald-100 sm:grid-cols-3 lg:min-w-[520px]">
+                {snapshot.sourceStatus.safetyNotes.map(label => (
+                  <span key={label} className="rounded-xl border border-emerald-500/20 bg-gray-950/50 px-3 py-2 text-center">
+                    {label}
+                  </span>
+                ))}
+              </div>
             </div>
-          ))}
+          </section>
+
+          <section className="grid grid-cols-2 gap-4 xl:grid-cols-6">
+            {STATUS_ORDER.map(status => (
+              <div key={status}>
+                <StatusSummaryCard snapshot={snapshot} status={status} count={getStatusCount(snapshot.workItems, status)} />
+              </div>
+            ))}
+          </section>
+
+          <ApprovalBlockerPanel summary={snapshot.summary} workItems={snapshot.workItems} />
+          <ProfileWorkStatePanel snapshot={snapshot} />
+          <MimirPhase2Panel snapshot={snapshot} />
+          <ServerSnapshotEnvelopePanel envelope={snapshot.sourceStatus.serverSnapshotEnvelope} />
+
+          <section className="rounded-2xl border border-gray-800 bg-gray-950/30 p-4">
+            <AgentFlowTimelineView snapshot={snapshot} />
+          </section>
+
+          <section className="rounded-2xl border border-gray-800 bg-gray-950/30 p-4">
+            <KanbanView snapshot={snapshot} />
+          </section>
         </div>
-      </section>
-
-      <section className="rounded-2xl border border-gray-800 bg-gray-950/30 p-4">
-        <AgentFlowTimelineView snapshot={snapshot} />
-      </section>
-
-      <section className="rounded-2xl border border-gray-800 bg-gray-950/30 p-4">
-        <KanbanView snapshot={snapshot} />
-      </section>
+      </details>
     </div>
   );
 }
