@@ -12,6 +12,11 @@ import { join } from 'node:path';
 const scanRoots = [
   'src/data/work-console',
   'src/components/work-console',
+  'src/components/AgentFlowTimelineView.tsx',
+  'src/components/ApprovalBlockerPanel.tsx',
+  'src/components/KanbanView.tsx',
+  'src/components/MimirPhase2Panel.tsx',
+  'src/components/ProfileWorkStatePanel.tsx',
   'src/types/workConsole.ts',
 ];
 

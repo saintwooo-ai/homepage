@@ -14,7 +14,7 @@ import {
   LockKeyhole,
   ShieldCheck,
 } from 'lucide-react';
-import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/mockAdapter';
 import type { AgentFlowStep, WorkConsoleSnapshot, WorkItemStatus } from '../types/workConsole';
 
 const statusTone: Record<WorkItemStatus, { label: string; badge: string; card: string; dot: string; icon: ReactNode }> = {

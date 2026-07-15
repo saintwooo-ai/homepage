@@ -23,13 +23,21 @@ import {
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
-import { getDefaultWorkConsoleAdapter, getWorkConsoleSnapshot } from '../../data/work-console';
+import { getDefaultWorkConsoleAdapter } from '../../data/work-console/adapterFactory';
+import { getWorkConsoleSnapshot } from '../../data/work-console/mockAdapter';
 import AgentFlowTimelineView from '../AgentFlowTimelineView';
 import ApprovalBlockerPanel from '../ApprovalBlockerPanel';
 import KanbanView from '../KanbanView';
 import MimirPhase2Panel from '../MimirPhase2Panel';
 import ProfileWorkStatePanel from '../ProfileWorkStatePanel';
-import type { ProfileWorkState, WorkConsoleSnapshot, WorkEvent, WorkItem, WorkItemStatus } from '../../types/workConsole';
+import type {
+  ProfileWorkState,
+  WorkConsoleServerSnapshotPolicyEnvelope,
+  WorkConsoleSnapshot,
+  WorkEvent,
+  WorkItem,
+  WorkItemStatus,
+} from '../../types/workConsole';
 
 const STATUS_ORDER: WorkItemStatus[] = ['queued', 'running', 'needs_approval', 'blocked', 'in_review', 'completed'];
 
@@ -294,6 +302,78 @@ function EventRow({ event }: { event: WorkEvent }) {
   );
 }
 
+function ServerSnapshotEnvelopePanel({ envelope }: { envelope?: WorkConsoleServerSnapshotPolicyEnvelope }) {
+  if (!envelope) return null;
+
+  const flags = [
+    { label: 'liveReadEnabled', value: envelope.liveReadEnabled ? 'true' : 'false', tone: envelope.liveReadEnabled ? 'text-rose-200' : 'text-emerald-200' },
+    { label: 'routeImplemented', value: envelope.endpointPolicy.routeImplemented ? 'true' : 'false', tone: envelope.endpointPolicy.routeImplemented ? 'text-amber-200' : 'text-emerald-200' },
+    { label: 'serverCollectorApproved', value: envelope.serverCollectorApproved ? 'true' : 'false', tone: envelope.serverCollectorApproved ? 'text-amber-200' : 'text-emerald-200' },
+    { label: 'rawLogsIncluded', value: envelope.rawLogsIncluded ? 'true' : 'false', tone: envelope.rawLogsIncluded ? 'text-rose-200' : 'text-emerald-200' },
+  ];
+
+  return (
+    <section className="rounded-2xl border border-sky-500/20 bg-sky-950/10 p-5 shadow-xl shadow-sky-950/10">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-sky-100">
+            <ShieldAlert className="h-4 w-4 text-sky-300" />
+            Server Snapshot Envelope · dummy serializer
+          </h2>
+          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-sky-100/75">
+            Local dummy serializer 결과만 fixture 경로에 연결했습니다. 서버 route, API, env, VPS, gateway, scheduled job, runtime read는 아직 없습니다.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[10px] font-bold lg:min-w-[420px]">
+          {flags.map(flag => (
+            <div key={flag.label} className="rounded-xl border border-sky-500/20 bg-gray-950/50 px-3 py-2">
+              <div className="font-mono uppercase text-sky-300/70">{flag.label}</div>
+              <div className={`mt-1 font-mono text-sm ${flag.tone}`}>{flag.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-sky-500/20 bg-gray-950/45 p-3">
+          <div className="font-mono text-[10px] uppercase text-sky-300/70">collectorState</div>
+          <div className="mt-1 text-sm font-bold text-white">{envelope.collectorState}</div>
+        </div>
+        <div className="rounded-xl border border-sky-500/20 bg-gray-950/45 p-3">
+          <div className="font-mono text-[10px] uppercase text-sky-300/70">sourceMode</div>
+          <div className="mt-1 text-sm font-bold text-amber-100">{envelope.sourceMode}</div>
+        </div>
+        <div className="rounded-xl border border-sky-500/20 bg-gray-950/45 p-3">
+          <div className="font-mono text-[10px] uppercase text-sky-300/70">cacheState</div>
+          <div className="mt-1 text-sm font-bold text-amber-100">{envelope.cacheState}</div>
+        </div>
+        <div className="rounded-xl border border-sky-500/20 bg-gray-950/45 p-3">
+          <div className="font-mono text-[10px] uppercase text-sky-300/70">killSwitch</div>
+          <div className="mt-1 text-sm font-bold text-rose-100">{envelope.killSwitch.state}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        {envelope.safeComponents.map(component => (
+          <div key={component.componentRef} className="rounded-xl border border-gray-800 bg-gray-950/40 p-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[10px] text-gray-500">{component.componentRef}</span>
+              <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 font-mono text-[10px] text-sky-200">
+                {component.kind} · {component.status}
+              </span>
+            </div>
+            <p className="mt-2 leading-5 text-gray-400">{component.safeMessage}</p>
+            <div className="mt-2 flex flex-wrap gap-2 font-mono text-[10px] text-gray-600">
+              <span>count={component.countBucket ?? '0'}</span>
+              <span>issue={component.issueCode ?? 'DUMMY_OBSERVATION'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 const DEFAULT_WORK_CONSOLE_ADAPTER = getDefaultWorkConsoleAdapter();
 const DEFAULT_WORK_CONSOLE_SNAPSHOT = getWorkConsoleSnapshot(DEFAULT_WORK_CONSOLE_ADAPTER.adapter);
 
@@ -379,6 +459,8 @@ export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSH
           ))}
         </div>
       </section>
+
+      <ServerSnapshotEnvelopePanel envelope={snapshot.sourceStatus.serverSnapshotEnvelope} />
 
       <section className="rounded-2xl border border-indigo-500/20 bg-indigo-950/10 p-5 shadow-xl shadow-indigo-950/10">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

@@ -5,6 +5,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../src/data/work-console/mockAdapter';
 import { serializeDummyServerSnapshot } from '../src/data/work-console/serverSnapshotSerializer';
 
 const privatePath = ['opt', 'data', 'private', 'runtime.log'].join('/');
@@ -161,5 +162,59 @@ assert.equal(manyObservationsEnvelope.safeComponents[26]?.componentRef, 'demo-co
 for (const component of manyObservationsEnvelope.safeComponents) {
   assert.match(component.componentRef, /^demo-component-[a-z]+$/);
 }
+
+const fixtureEnvelope = MOCK_WORK_CONSOLE_SNAPSHOT.sourceStatus.serverSnapshotEnvelope;
+assert.ok(fixtureEnvelope, 'mock Work Console snapshot must expose the dummy serializer envelope');
+const regeneratedFixtureEnvelope = serializeDummyServerSnapshot({
+  generatedAt: '2026-07-15T00:00:00.000Z',
+  observations: [
+    {
+      kind: 'system-check',
+      state: 'disabled',
+      count: 0,
+      observedAt: '2026-07-15T00:00:00.000Z',
+      issueCode: 'COLLECTOR_DISABLED',
+      message: 'Dummy serializer envelope is connected to the UI fixture path only. No runtime source is connected.',
+    },
+    {
+      kind: 'gateway',
+      state: 'disabled',
+      count: 0,
+      issueCode: 'SOURCE_NOT_CONNECTED',
+      message: 'Gateway status remains intentionally uncollected until server handoff and approval gates pass.',
+    },
+    {
+      kind: 'scheduler',
+      state: 'disabled',
+      count: 0,
+      issueCode: 'SOURCE_NOT_CONNECTED',
+      message: 'Scheduler and scheduled job state are not read by the browser fixture.',
+    },
+  ],
+  errors: [
+    {
+      code: 'WORK_CONSOLE_COLLECTOR_DISABLED',
+      message: 'Server collector route is not implemented or approved in this phase.',
+      retryable: false,
+      severity: 'info',
+    },
+  ],
+});
+assert.deepEqual(fixtureEnvelope, regeneratedFixtureEnvelope);
+assert.equal(fixtureEnvelope.apiVersion, 'work-console-snapshot.v1');
+assert.equal(fixtureEnvelope.collectorState, 'disabled');
+assert.equal(fixtureEnvelope.liveReadEnabled, false);
+assert.equal(fixtureEnvelope.productionLiveApproved, false);
+assert.equal(fixtureEnvelope.serverCollectorApproved, false);
+assert.equal(fixtureEnvelope.endpointPolicy.routeImplemented, false);
+assert.equal(fixtureEnvelope.rawLogsIncluded, false);
+assert.equal(fixtureEnvelope.rawRuntimeOutputIncluded, false);
+assert.ok(fixtureEnvelope.safeComponents.length >= 3);
+assert.equal(fixtureEnvelope.safeComponents[0]?.componentRef, 'demo-component-a');
+assert.equal(fixtureEnvelope.safeComponents[0]?.issueCode, 'COLLECTOR_DISABLED');
+assert.equal(fixtureEnvelope.safeComponents[1]?.issueCode, 'SOURCE_NOT_CONNECTED');
+assert.equal(fixtureEnvelope.safeComponents[2]?.issueCode, 'SOURCE_NOT_CONNECTED');
+assert.equal(JSON.stringify(fixtureEnvelope).includes('/cron/'), false);
+assert.equal(JSON.stringify(fixtureEnvelope).includes('/profiles/'), false);
 
 console.log('Work Console Phase 4B local dummy serializer verification passed');

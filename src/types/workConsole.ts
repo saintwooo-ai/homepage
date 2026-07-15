@@ -255,6 +255,7 @@ export interface WorkConsoleSourceStatus {
   serverHandoff: WorkConsoleServerHandoffStatus;
   approvalGates: WorkConsoleApprovalGateStatus[];
   checkedAt: string;
+  serverSnapshotEnvelope?: WorkConsoleServerSnapshotPolicyEnvelope;
 }
 
 export type WorkConsoleSnapshotApiVersion = 'work-console-snapshot.v1';
