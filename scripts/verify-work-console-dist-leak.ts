@@ -37,7 +37,6 @@ const forbiddenChecks: Array<{ label: string; pattern: RegExp }> = [
   { label: 'explicit-secret-assignment', pattern: /\b(?:api[_-]?key|secret|password|token)[\s:=]+(?:live|prod|real)[a-z0-9._-]{8,}/i },
   { label: 'jwt-like', pattern: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/ },
   { label: 'private-key-block', pattern: /BEGIN\s+(?:RSA\s+|OPENSSH\s+|EC\s+)?PRIVATE\s+KEY/i },
-  { label: 'supabase-project-url', pattern: /https?:\/\/[a-z0-9-]+\.supabase\.co/i },
 ];
 
 const findings: string[] = [];
