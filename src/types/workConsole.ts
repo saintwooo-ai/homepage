@@ -257,6 +257,56 @@ export interface WorkConsoleSourceStatus {
   checkedAt: string;
 }
 
+export type WorkConsoleSnapshotApiVersion = 'work-console-snapshot.v1';
+
+export type WorkConsoleServerSnapshotSourceMode =
+  | 'fixture-only'
+  | 'server-snapshot-disabled'
+  | 'server-snapshot-stale'
+  | 'server-snapshot-fallback'
+  | 'server-snapshot';
+
+export type WorkConsoleServerSnapshotCacheState = 'fresh' | 'stale' | 'fallback' | 'disabled' | 'unavailable';
+
+export type WorkConsoleSafeComponentKind = 'gateway' | 'scheduler' | 'profile-group' | 'session-summary' | 'system-check';
+
+export interface WorkConsoleSafeApiError {
+  code: string;
+  safeMessage: string;
+  retryable: boolean;
+  severity: 'info' | 'warning' | 'error';
+  opaqueCorrelationRef?: string;
+}
+
+export interface WorkConsoleSafeComponentSummary {
+  componentRef: string;
+  kind: WorkConsoleSafeComponentKind;
+  status: 'disabled' | 'stale' | 'fallback' | 'unknown' | 'degraded';
+  safeMessage: string;
+  lastUpdatedAt?: string;
+  countBucket?: '0' | '1-5' | '5+';
+  issueCode?: string;
+}
+
+export interface WorkConsoleServerSnapshotEnvelope {
+  apiVersion: WorkConsoleSnapshotApiVersion;
+  sourceMode: WorkConsoleServerSnapshotSourceMode;
+  cacheState: WorkConsoleServerSnapshotCacheState;
+  generatedAt: string;
+  staleAfter: string;
+  expiresAt: string;
+  readOnly: true;
+  liveReadEnabled: boolean;
+  productionLiveApproved: boolean;
+  serverCollectorApproved: boolean;
+  privateIdsRedacted: true;
+  rawLogsIncluded: false;
+  rawRuntimeOutputIncluded: false;
+  safeComponents: WorkConsoleSafeComponentSummary[];
+  errors: WorkConsoleSafeApiError[];
+  approvalGates: WorkConsoleApprovalGateStatus[];
+}
+
 export interface WorkConsoleSnapshot {
   summary: WorkConsoleSummary;
   sourceStatus: WorkConsoleSourceStatus;

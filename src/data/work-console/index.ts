@@ -13,3 +13,4 @@ export * from './cronJobOutputReader';
 export * from './cronMetadataSanitizer';
 export * from './cronDomainPolicy';
 export * from './cronOwnerPolicy';
+export * from './serverHandoffContractFixture';
