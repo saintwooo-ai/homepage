@@ -1,15 +1,15 @@
 /**
- * Phase 3C-4 Work Console source-boundary verification.
- * Scans only Work Console source paths to ensure this frontend path stays
- * fixture/default and cannot import runtime, env, filesystem, network, DB,
- * gateway, or cron readers before server handoff approval.
+ * Phase 3C-5 Work Console source-boundary verification.
+ *
+ * This verifies the fixture/static frontend path only. It does not approve or
+ * exercise live server/API/runtime/Hermes gateway/cron reads.
  */
 
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 
-const scanRoots = [
+const allScanRoots = [
   'src/data/work-console',
   'src/components/work-console',
   'src/components/AgentFlowTimelineView.tsx',
@@ -20,23 +20,60 @@ const scanRoots = [
   'src/types/workConsole.ts',
 ];
 
-const files: string[] = [];
+const uiScanRoots = [
+  'src/components/work-console',
+  'src/components/AgentFlowTimelineView.tsx',
+  'src/components/ApprovalBlockerPanel.tsx',
+  'src/components/KanbanView.tsx',
+  'src/components/MimirPhase2Panel.tsx',
+  'src/components/ProfileWorkStatePanel.tsx',
+];
 
-const walk = (path: string) => {
-  if (!existsSync(path)) return;
-  const stat = statSync(path);
-  if (stat.isFile()) {
-    if (/\.(ts|tsx)$/i.test(path)) files.push(path);
-    return;
-  }
-  for (const entry of readdirSync(path)) walk(join(path, entry));
+const browserEntrypoint = 'src/data/work-console/browser.ts';
+
+const collectFiles = (roots: string[]) => {
+  const files: string[] = [];
+  const walk = (path: string) => {
+    if (!existsSync(path)) return;
+    const stat = statSync(path);
+    if (stat.isFile()) {
+      if (/\.(ts|tsx)$/i.test(path)) files.push(normalize(path));
+      return;
+    }
+    for (const entry of readdirSync(path)) walk(join(path, entry));
+  };
+
+  for (const root of roots) walk(root);
+  return Array.from(new Set(files)).sort();
 };
 
-for (const root of scanRoots) walk(root);
+const allFiles = collectFiles(allScanRoots);
+const uiFiles = collectFiles(uiScanRoots);
+const browserFiles = existsSync(browserEntrypoint) ? [browserEntrypoint] : [];
 
-const forbiddenChecks: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'node-fs-import', pattern: /from\s+['"]node:fs['"]|from\s+['"]fs['"]|require\(['"]fs['"]\)/ },
-  { label: 'node-path-live-reader-import', pattern: /from\s+['"]node:path['"]|from\s+['"]path['"]|require\(['"]path['"]\)/ },
+const importSpecifiers = (body: string) => {
+  const specs: string[] = [];
+  const patterns = [
+    /import(?:\s+type)?\s+(?:[^'";]+?\s+from\s+)?['"]([^'"]+)['"]/g,
+    /export(?:\s+type)?\s+(?:[^'";]+?\s+from\s+)?['"]([^'"]+)['"]/g,
+    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  ];
+
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(body))) specs.push(match[1]);
+  }
+  return specs;
+};
+
+const isWorkConsoleDataImport = (specifier: string) => /(?:^|\/)data\/work-console(?:\/|$)/.test(specifier);
+const isAllowedBrowserImport = (specifier: string) => /(?:^|\/)data\/work-console\/browser$/.test(specifier);
+const isBareWorkConsoleBarrel = (specifier: string) => /(?:^|\/)data\/work-console(?:\/index)?$/.test(specifier);
+const isForbiddenWorkConsoleModule = (specifier: string) => /(?:serverSnapshotSerializer|liveHermesWorkConsoleAdapter|adapterFactory|runtimeGate|cronJobOutputReader|cronOutputSanitizer|cronMetadataSanitizer|cronDomainPolicy|cronOwnerPolicy|collector|gateway|hermes|serializer|runtime|server)(?:\.|$|\/)/i.test(specifier);
+const isNodeOnlyImport = (specifier: string) => /^(?:node:)?(?:fs|path|process|child_process|os|crypto)$/.test(specifier);
+
+const forbiddenSourceChecks: Array<{ label: string; pattern: RegExp }> = [
   { label: 'process-env', pattern: /process\.env/ },
   { label: 'vite-env', pattern: /import\.meta\.env/ },
   { label: 'fetch-call', pattern: /\bfetch\s*\(/ },
@@ -51,12 +88,41 @@ const forbiddenChecks: Array<{ label: string; pattern: RegExp }> = [
 ];
 
 const findings: string[] = [];
-for (const file of files) {
+
+for (const file of allFiles) {
   const body = readFileSync(file, 'utf8');
-  for (const check of forbiddenChecks) {
+  for (const check of forbiddenSourceChecks) {
     if (check.pattern.test(body)) findings.push(`${check.label}: ${file}`);
   }
 }
 
+for (const file of [...uiFiles, ...browserFiles]) {
+  const body = readFileSync(file, 'utf8');
+  for (const specifier of importSpecifiers(body)) {
+    if (isNodeOnlyImport(specifier)) findings.push(`node-only-import: ${file} -> ${specifier}`);
+  }
+}
+
+for (const file of uiFiles) {
+  const body = readFileSync(file, 'utf8');
+  for (const specifier of importSpecifiers(body)) {
+    if (isBareWorkConsoleBarrel(specifier)) findings.push(`ui-work-console-barrel-import: ${file} -> ${specifier}`);
+    if (isWorkConsoleDataImport(specifier) && !isAllowedBrowserImport(specifier)) {
+      findings.push(`ui-non-browser-work-console-import: ${file} -> ${specifier}`);
+    }
+    if (isForbiddenWorkConsoleModule(specifier)) findings.push(`ui-forbidden-work-console-import: ${file} -> ${specifier}`);
+  }
+}
+
+for (const file of browserFiles) {
+  const body = readFileSync(file, 'utf8');
+  for (const specifier of importSpecifiers(body)) {
+    if (isForbiddenWorkConsoleModule(specifier)) findings.push(`browser-forbidden-work-console-import: ${file} -> ${specifier}`);
+    if (isBareWorkConsoleBarrel(specifier)) findings.push(`browser-barrel-import: ${file} -> ${specifier}`);
+  }
+}
+
 assert.deepEqual(findings, [], `forbidden Work Console source-boundary patterns:\n${findings.join('\n')}`);
-console.log(`Work Console Phase 3C-4 source-boundary verification passed (${files.length} files scanned)`);
+console.log(
+  `Work Console source-boundary verification passed (${allFiles.length} files scanned, ${uiFiles.length} UI files, browser entrypoint locked)`,
+);

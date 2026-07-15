@@ -4,7 +4,7 @@
  */
 
 import { GitBranch, Link2, ShieldAlert } from 'lucide-react';
-import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/mockAdapter';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/browser';
 import type { WorkConsoleSnapshot } from '../types/workConsole';
 
 export default function MimirPhase2Panel({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {

@@ -20,7 +20,7 @@ import {
   TrendingUp,
   UserRoundCheck,
 } from 'lucide-react';
-import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/mockAdapter';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/browser';
 import type { WorkConsoleSnapshot, WorkItem, WorkItemStatus } from '../types/workConsole';
 
 interface WorkStatusColumn {

@@ -1,6 +1,10 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * Internal/deprecated Work Console barrel.
+ * Do not import this module from browser/UI code. Use
+ * `src/data/work-console/browser` instead.
  */
 
 export * from './mockFixture';

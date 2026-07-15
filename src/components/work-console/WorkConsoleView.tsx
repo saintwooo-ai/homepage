@@ -23,8 +23,7 @@ import {
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
-import { getDefaultWorkConsoleAdapter } from '../../data/work-console/adapterFactory';
-import { getWorkConsoleSnapshot } from '../../data/work-console/mockAdapter';
+import { getWorkConsoleSnapshot, mockWorkConsoleAdapter } from '../../data/work-console/browser';
 import AgentFlowTimelineView from '../AgentFlowTimelineView';
 import ApprovalBlockerPanel from '../ApprovalBlockerPanel';
 import KanbanView from '../KanbanView';
@@ -374,8 +373,7 @@ function ServerSnapshotEnvelopePanel({ envelope }: { envelope?: WorkConsoleServe
   );
 }
 
-const DEFAULT_WORK_CONSOLE_ADAPTER = getDefaultWorkConsoleAdapter();
-const DEFAULT_WORK_CONSOLE_SNAPSHOT = getWorkConsoleSnapshot(DEFAULT_WORK_CONSOLE_ADAPTER.adapter);
+const DEFAULT_WORK_CONSOLE_SNAPSHOT = getWorkConsoleSnapshot(mockWorkConsoleAdapter);
 
 export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
   const featuredWork = snapshot.workItems.find(item => item.status === 'running') ?? snapshot.workItems[0];

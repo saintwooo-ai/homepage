@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Activity, ArrowRight, Clock, FileText, ShieldCheck } from 'lucide-react';
-import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/mockAdapter';
+import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/browser';
 import type { ProfileWorkStatus, WorkConsoleSnapshot } from '../types/workConsole';
 
 const statusCopy: Record<ProfileWorkStatus, { label: string; className: string }> = {
