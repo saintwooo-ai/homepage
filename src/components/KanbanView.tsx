@@ -8,6 +8,8 @@ import { useState, type ReactNode } from 'react';
 import {
   AlertOctagon,
   AlertTriangle,
+  ArrowRight,
+  CheckCheck,
   CheckCircle2,
   Clock,
   Cpu,
@@ -15,6 +17,8 @@ import {
   Hourglass,
   Layers3,
   PauseCircle,
+  PlayCircle,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -31,6 +35,61 @@ interface WorkStatusColumn {
   accentClass: string;
   emptyText: string;
 }
+
+type LocalWorkItemOverride = Partial<
+  Pick<WorkItem, 'status' | 'progress' | 'currentStep' | 'nextAction' | 'updatedAt'>
+> & {
+  interactionLabel?: string;
+};
+
+type LocalEvent = {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  level: 'info' | 'success' | 'warning';
+};
+
+const nowIso = () => new Date().toISOString();
+
+const demoTransitions: Record<WorkItemStatus, LocalWorkItemOverride | null> = {
+  queued: {
+    status: 'running',
+    progress: 42,
+    currentStep: '브라우저 mock에서 담당 프로필이 작업을 시작한 것으로 표시',
+    nextAction: '시연용으로 검토 단계로 이동 가능',
+    interactionLabel: '시작 표시',
+  },
+  running: {
+    status: 'in_review',
+    progress: 76,
+    currentStep: '브라우저 mock에서 산출물 제출 완료로 표시',
+    nextAction: 'checker 검토 통과 표시 가능',
+    interactionLabel: '검토로 이동',
+  },
+  needs_approval: {
+    status: 'in_review',
+    progress: 35,
+    currentStep: '브라우저 mock 승인만 표시됨',
+    nextAction: '실제 운영 승인은 별도 server 승인 후 진행',
+    interactionLabel: 'mock 승인',
+  },
+  blocked: {
+    status: 'in_review',
+    progress: 62,
+    currentStep: '브라우저 mock에서 막힘이 해소된 것으로 표시',
+    nextAction: 'checker가 범위/리스크를 재검토',
+    interactionLabel: '막힘 해소 표시',
+  },
+  in_review: {
+    status: 'completed',
+    progress: 100,
+    currentStep: '브라우저 mock에서 검토 통과로 표시',
+    nextAction: 'router 최종 보고 카드로 묶기',
+    interactionLabel: '완료 표시',
+  },
+  completed: null,
+};
 
 const columns: WorkStatusColumn[] = [
   {
@@ -120,13 +179,16 @@ function WorkItemCard({
   item,
   isMockApproved,
   onMockApprove,
+  onMockMove,
 }: {
   snapshot: WorkConsoleSnapshot;
   item: WorkItem;
   isMockApproved: boolean;
   onMockApprove: (workItemId: string) => void;
+  onMockMove: (workItemId: string, status: WorkItemStatus) => void;
 }) {
-  const isApproval = item.status === 'needs_approval' || item.approvalRequired;
+  const nextTransition = demoTransitions[item.status];
+  const isApproval = item.status === 'needs_approval' || (item.approvalRequired && !isMockApproved);
   const isBlocked = item.status === 'blocked';
   const isReview = item.status === 'in_review' || item.reviewRequired;
   const highlightClass = isBlocked
@@ -166,7 +228,7 @@ function WorkItemCard({
 
       {isMockApproved && (
         <div className="mt-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-200">
-          로컬 mock 승인 표시됨 · 실제 Kanban/API/운영 작업 없음
+          로컬 mock 상호작용 적용됨 · 실제 Kanban/API/운영 작업 없음
         </div>
       )}
 
@@ -180,6 +242,14 @@ function WorkItemCard({
         {item.assignedProfiles.map(profile => (
           <span key={profile} className="rounded-lg border border-gray-800 bg-gray-900/80 px-2 py-1 font-mono text-[10px] text-gray-400">
             {profile}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {item.tags.slice(0, 4).map(tag => (
+          <span key={tag} className="rounded-full border border-gray-800 bg-gray-950/40 px-2 py-0.5 text-[9px] text-gray-500">
+            #{tag}
           </span>
         ))}
       </div>
@@ -229,38 +299,121 @@ function WorkItemCard({
         </div>
       )}
 
+      {item.artifactRefs.length > 0 && (
+        <div className="mt-3 rounded-xl border border-gray-900 bg-gray-950/35 p-2">
+          <div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-gray-600">Mock artifacts</div>
+          <div className="space-y-1">
+            {item.artifactRefs.slice(0, 2).map(ref => (
+              <div key={`${item.id}-${ref.label}`} className="flex items-start justify-between gap-2 text-[10px]">
+                <span className="font-semibold text-gray-300">{ref.label}</span>
+                <span className="rounded bg-gray-900 px-1.5 py-0.5 font-mono text-[9px] text-gray-500">{ref.type}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-3 flex items-center justify-between border-t border-gray-900/80 pt-3 text-[10px] text-gray-500">
         <span>업데이트 {formatTimestamp(item.updatedAt)}</span>
         <span>{item.source.toUpperCase()} ONLY</span>
       </div>
 
-      {isApproval && (
+      {(isApproval || nextTransition) && (
         <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-950/20 p-2 text-[10px] leading-relaxed text-amber-100/80">
           읽기 전용 화면입니다. 아래 버튼은 이 브라우저 안의 표시만 바꾸며 실제 승인, Kanban 변경, API 호출은 하지 않습니다.
         </div>
       )}
 
-      {isApproval && (
-        <button
-          type="button"
-          onClick={() => onMockApprove(item.id)}
-          disabled={isMockApproved}
-          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-amber-400 px-3 py-2 text-[10px] font-black text-gray-950 transition-colors hover:bg-amber-300 disabled:cursor-default disabled:bg-emerald-400 disabled:text-gray-950"
-        >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          {isMockApproved ? '브라우저 표시만 완료 — 실제 호출 없음' : '브라우저 표시만 바꾸기 · 실제 승인 아님'}
-        </button>
-      )}
+      <div className="mt-3 grid gap-2">
+        {isApproval && (
+          <button
+            type="button"
+            onClick={() => onMockApprove(item.id)}
+            disabled={isMockApproved}
+            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-amber-400 px-3 py-2 text-[10px] font-black text-gray-950 transition-colors hover:bg-amber-300 disabled:cursor-default disabled:bg-emerald-400 disabled:text-gray-950"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {isMockApproved ? '브라우저 표시만 완료 — 실제 호출 없음' : '브라우저 표시만 바꾸기 · 실제 승인 아님'}
+          </button>
+        )}
+        {nextTransition && !isApproval && (
+          <button
+            type="button"
+            onClick={() => onMockMove(item.id, item.status)}
+            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-2 text-[10px] font-black text-indigo-100 transition-colors hover:bg-indigo-500/20"
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+            {nextTransition.interactionLabel} · 브라우저 mock 이동
+          </button>
+        )}
+      </div>
     </motion.article>
   );
 }
 
 export default function KanbanView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
   const [mockApprovedIds, setMockApprovedIds] = useState<string[]>([]);
-  const recentEvents = snapshot.events.slice(-5).reverse();
+  const [localOverrides, setLocalOverrides] = useState<Record<string, LocalWorkItemOverride>>({});
+  const [localEvents, setLocalEvents] = useState<LocalEvent[]>([]);
+  const displayItems = snapshot.workItems.map(item => ({ ...item, ...localOverrides[item.id] }));
+  const recentEvents = [
+    ...localEvents,
+    ...snapshot.events.slice(-5).reverse().map(event => ({
+      id: event.id,
+      title: event.title,
+      message: event.message,
+      timestamp: event.timestamp,
+      level: event.level === 'error' ? 'warning' as const : event.level,
+    })),
+  ].slice(0, 6);
   const activeProfileCount = snapshot.profileStates.filter(profile => profile.status !== 'idle').length;
+  const localMoveCount = Object.keys(localOverrides).length;
+
+  const pushLocalEvent = (item: WorkItem, override: LocalWorkItemOverride) => {
+    const timestamp = nowIso();
+    setLocalEvents(prev => [
+      {
+        id: `local-${item.id}-${timestamp}`,
+        title: override.interactionLabel ?? '브라우저 mock 이동',
+        message: `${item.externalId ?? item.id} 카드가 ${snapshot.summary.statusLabels[item.status]} → ${override.status ? snapshot.summary.statusLabels[override.status] : snapshot.summary.statusLabels[item.status]} 상태로 표시만 변경되었습니다.`,
+        timestamp,
+        level: override.status === 'completed' ? 'success' : 'info',
+      },
+      ...prev,
+    ].slice(0, 4));
+  };
+
+  const handleMockMove = (workItemId: string, status: WorkItemStatus) => {
+    const original = snapshot.workItems.find(item => item.id === workItemId);
+    const transition = demoTransitions[status];
+    if (!original || !transition) return;
+
+    const override: LocalWorkItemOverride = {
+      ...transition,
+      updatedAt: nowIso(),
+    };
+    setLocalOverrides(prev => ({ ...prev, [workItemId]: override }));
+    pushLocalEvent(original, override);
+  };
+
   const handleMockApprove = (workItemId: string) => {
+    const original = snapshot.workItems.find(item => item.id === workItemId);
+    const transition = demoTransitions.needs_approval;
+    if (!original || !transition) return;
+
+    const override: LocalWorkItemOverride = {
+      ...transition,
+      updatedAt: nowIso(),
+    };
     setMockApprovedIds(prev => (prev.includes(workItemId) ? prev : [...prev, workItemId]));
+    setLocalOverrides(prev => ({ ...prev, [workItemId]: override }));
+    pushLocalEvent(original, override);
+  };
+
+  const resetMockBoard = () => {
+    setMockApprovedIds([]);
+    setLocalOverrides({});
+    setLocalEvents([]);
   };
 
   return (
@@ -270,25 +423,41 @@ export default function KanbanView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { 
           <div>
             <h1 className="flex items-center gap-2 text-xl font-bold text-white">
               <Cpu className="h-5 w-5 text-indigo-400" />
-              Work Status Board / Kanban 진화형
+              Hermes Kanban Board
             </h1>
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-gray-400">
-              대기·진행중·승인필요·막힘·검토중·완료 6개 컬럼으로 작업 카드 흐름을 보여줍니다.
-              이 화면은 {snapshot.summary.sourceLabel} 기반 read-only snapshot 전용이며 실제 Kanban, session DB, gateway, API에는 연결하지 않습니다.
+              router → dev-pm → dev-architect → dev-builder → checker → server 같은 Hermes 작업 흐름을 칸반 카드로 시연합니다.
+              이 화면은 {snapshot.summary.sourceLabel} 기반 read-only/mock 전용이며 실제 Kanban, session DB, gateway, API에는 연결하지 않습니다.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
-            <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-              <div className="font-mono text-lg font-black text-white">{snapshot.workItems.length}</div>
-              <div className="text-gray-500">작업 카드</div>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
+                <div className="font-mono text-lg font-black text-white">{displayItems.length}</div>
+                <div className="text-gray-500">작업 카드</div>
+              </div>
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
+                <div className="font-mono text-lg font-black text-cyan-200">{activeProfileCount}</div>
+                <div className="text-gray-500">프로필 상태</div>
+              </div>
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3">
+                <div className="font-mono text-lg font-black text-emerald-200">MOCK</div>
+                <div className="text-gray-500">연동 모드</div>
+              </div>
             </div>
-            <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-3">
-              <div className="font-mono text-lg font-black text-cyan-200">{activeProfileCount}</div>
-              <div className="text-gray-500">프로필 상태</div>
-            </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3">
-              <div className="font-mono text-lg font-black text-emerald-200">MOCK</div>
-              <div className="text-gray-500">연동 모드</div>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-2 text-[10px]">
+              <span className="inline-flex items-center gap-1 font-semibold text-indigo-100">
+                <PlayCircle className="h-3.5 w-3.5 text-indigo-300" />
+                브라우저 mock 이동 {localMoveCount}건
+              </span>
+              <button
+                type="button"
+                onClick={resetMockBoard}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-gray-700 px-2 py-1 font-bold text-gray-300 transition-colors hover:border-indigo-400 hover:text-white"
+              >
+                <RefreshCw className="h-3 w-3" />
+                초기화
+              </button>
             </div>
           </div>
         </div>
@@ -296,15 +465,32 @@ export default function KanbanView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { 
         <div className="mt-5 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 text-xs text-indigo-100">
           <div className="flex items-center gap-2 font-bold">
             <Sparkles className="h-4 w-4 text-indigo-300" />
-            Phase 2 경계
+            시연 경계
           </div>
           <p className="mt-1 text-indigo-200/80">{snapshot.summary.phase2Notice}</p>
+          <p className="mt-1 text-indigo-200/80">버튼 클릭은 React state만 바꿉니다. 서버, gateway, cron, DB, env 변경, 실제 승인, 실제 작업 시작은 일어나지 않습니다.</p>
+        </div>
+
+        <div className="mt-4 grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+          {snapshot.agentFlow.map(step => (
+            <div key={step.id} className="rounded-xl border border-gray-800 bg-gray-950/45 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[10px] font-black text-indigo-200">{step.profile}</span>
+                <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[9px] text-gray-500">{step.order}</span>
+              </div>
+              <p className="mt-1 text-[10px] leading-relaxed text-gray-400">{step.role}</p>
+              <div className="mt-2 flex items-center gap-1 text-[9px] text-gray-600">
+                <CheckCheck className="h-3 w-3" />
+                {snapshot.summary.statusLabels[step.status]}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {columns.map(column => {
-          const items = getColumnItems(snapshot.workItems, column.id);
+          const items = getColumnItems(displayItems, column.id);
 
           return (
             <div key={column.id} className={`flex min-h-[560px] flex-col rounded-2xl border p-3 shadow-lg ${column.accentClass}`}>
@@ -335,6 +521,7 @@ export default function KanbanView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { 
                           item={item}
                           isMockApproved={mockApprovedIds.includes(item.id)}
                           onMockApprove={handleMockApprove}
+                          onMockMove={handleMockMove}
                         />
                       </div>
                     ))
@@ -357,7 +544,7 @@ export default function KanbanView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { 
               <div key={profile.profileId} className="rounded-xl border border-gray-800 bg-gray-950/45 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-xs font-bold text-gray-100">{profile.displayName}</span>
-                  <span className="rounded-full border border-gray-800 px-2 py-0.5 text-[9px] text-gray-400">{profile.status}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[9px] ${profile.status === 'running' ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200' : profile.status.includes('waiting') ? 'border-amber-400/30 bg-amber-500/10 text-amber-200' : profile.status === 'blocked' || profile.status === 'error' ? 'border-rose-400/30 bg-rose-500/10 text-rose-200' : 'border-gray-800 text-gray-400'}`}>{profile.status}</span>
                 </div>
                 <p className="mt-1 text-[10px] leading-relaxed text-gray-500">{profile.currentAction}</p>
                 <div className="mt-2 flex items-center justify-between text-[10px] text-gray-500">
