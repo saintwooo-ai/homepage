@@ -34,6 +34,8 @@ assert.ok(safety, 'safety block is required');
 assert.equal(safety.readOnly, true);
 assert.equal(safety.publicSafeOnly, true);
 assert.equal(safety.rawLogsIncluded, false);
+assert.equal(safety.privateIdsRedacted, true);
+assert.equal(safety.tokensRemoved, true);
 assert.equal(safety.hermesRuntimeRead, false);
 assert.equal(safety.gatewayRead, false);
 assert.equal(safety.cronRead, false);
@@ -46,6 +48,7 @@ assert.ok(events.length >= 2);
 for (const event of events) {
   assert.equal(typeof event.id, 'string');
   assert.equal(typeof event.timestamp, 'string');
+  assert.ok(!Number.isNaN(new Date(String(event.timestamp)).getTime()), 'event timestamp must be parseable');
   assert.equal(typeof event.profile, 'string');
   assert.ok(['info', 'success', 'warning', 'error'].includes(String(event.level)));
   assert.equal(typeof event.message, 'string');
@@ -59,7 +62,10 @@ const forbiddenPayloadPatterns: Array<[string, RegExp]> = [
   ['jwt', /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
   ['private-key', /-----BEGIN (?:RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----/],
   ['profile-path', /\/opt\/data\/profiles\//],
+  ['home-path', /\/home\/[A-Za-z0-9._-]+\//],
+  ['etc-path', /\/etc\//],
   ['hermes-home', /\/\.hermes\//],
+  ['ssh-path', /\.ssh\//],
   ['cron-path', /\/cron\//],
   ['jobs-json', /jobs\.json/i],
 ];
@@ -67,8 +73,11 @@ for (const [label, pattern] of forbiddenPayloadPatterns) {
   assert.ok(!pattern.test(serialized), `forbidden payload pattern leaked: ${label}`);
 }
 
-assert.ok(liveStatusSource.includes('api.github.com/repos/saintwooo-ai/homepage/contents/public/work-status.json?ref=main'));
 assert.ok(liveStatusSource.includes("const LOCAL_STATUS_URL = '/work-status.json'"));
+assert.ok(liveStatusSource.includes('raw.githubusercontent.com/saintwooo-ai/homepage/main/public/work-status.json'));
+assert.ok(liveStatusSource.includes('const POLL_INTERVAL_MS = 30000'));
+assert.ok(!liveStatusSource.includes('api.github.com/repos/saintwooo-ai/homepage/contents'));
+assert.ok(!liveStatusSource.includes('Date.now()}`'));
 assert.ok(!/process\.env|import\.meta\.env|localStorage|sessionStorage|document\.cookie/.test(liveStatusSource));
 assert.ok(!/@supabase\/supabase-js|createClient\s*\(/.test(liveStatusSource));
 assert.ok(!/WebSocket|EventSource/.test(liveStatusSource));

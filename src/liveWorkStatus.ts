@@ -50,10 +50,10 @@ export interface LiveWorkStatusViewState {
   errorMessage?: string;
 }
 
-const GITHUB_STATUS_API_URL =
-  'https://api.github.com/repos/saintwooo-ai/homepage/contents/public/work-status.json?ref=main';
 const LOCAL_STATUS_URL = '/work-status.json';
-const POLL_INTERVAL_MS = 5000;
+const RAW_GITHUB_STATUS_URL =
+  'https://raw.githubusercontent.com/saintwooo-ai/homepage/main/public/work-status.json';
+const POLL_INTERVAL_MS = 30000;
 const REQUEST_TIMEOUT_MS = 6000;
 
 const secretLikePatterns = [
@@ -64,11 +64,27 @@ const secretLikePatterns = [
   /-----BEGIN (?:RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----/,
   /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
   /\/opt\/data\/profiles\//,
+  /\/home\/[A-Za-z0-9._-]+\//,
+  /\/etc\//,
   /\/\.hermes\//,
+  /\.ssh\//,
   /\/cron\//,
 ];
 
 const safeJsonStringify = (value: unknown) => JSON.stringify(value ?? '');
+
+const isLiveWorkStatusEvent = (value: unknown): value is LiveWorkStatusEvent => {
+  if (!value || typeof value !== 'object') return false;
+  const event = value as Partial<LiveWorkStatusEvent>;
+  return (
+    typeof event.id === 'string' &&
+    typeof event.timestamp === 'string' &&
+    !Number.isNaN(new Date(event.timestamp).getTime()) &&
+    typeof event.profile === 'string' &&
+    ['info', 'success', 'warning', 'error'].includes(String(event.level)) &&
+    typeof event.message === 'string'
+  );
+};
 
 export const isLiveWorkStatusPayload = (value: unknown): value is LiveWorkStatusPayload => {
   if (!value || typeof value !== 'object') return false;
@@ -93,10 +109,13 @@ export const isLiveWorkStatusPayload = (value: unknown): value is LiveWorkStatus
     typeof payload.currentAction === 'string' &&
     typeof payload.nextAction === 'string' &&
     Array.isArray(payload.events) &&
+    payload.events.every(isLiveWorkStatusEvent) &&
     !!safety &&
     safety.readOnly === true &&
     safety.publicSafeOnly === true &&
     safety.rawLogsIncluded === false &&
+    safety.privateIdsRedacted === true &&
+    safety.tokensRemoved === true &&
     safety.hermesRuntimeRead === false &&
     safety.gatewayRead === false &&
     safety.cronRead === false &&
@@ -106,17 +125,11 @@ export const isLiveWorkStatusPayload = (value: unknown): value is LiveWorkStatus
   );
 };
 
-const decodeBase64Utf8 = (content: string) => {
-  const binary = atob(content.replace(/\n/g, ''));
-  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-};
-
 const fetchWithTimeout = async (url: string) => {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
+    const response = await fetch(url, {
       cache: 'no-store',
       signal: controller.signal,
     });
@@ -129,17 +142,15 @@ const fetchWithTimeout = async (url: string) => {
 
 export const loadLiveWorkStatus = async (): Promise<{ payload: LiveWorkStatusPayload; sourceUrl: string }> => {
   try {
-    const response = await fetchWithTimeout(GITHUB_STATUS_API_URL);
-    const body = await response.json() as { content?: string; encoding?: string };
-    if (body.encoding !== 'base64' || !body.content) throw new Error('Unexpected GitHub content response');
-    const parsed = JSON.parse(decodeBase64Utf8(body.content)) as unknown;
-    if (!isLiveWorkStatusPayload(parsed)) throw new Error('Invalid safe status payload');
-    return { payload: parsed, sourceUrl: 'github:saintwooo-ai/homepage/public/work-status.json@main' };
-  } catch (githubError) {
     const response = await fetchWithTimeout(LOCAL_STATUS_URL);
     const parsed = await response.json() as unknown;
-    if (!isLiveWorkStatusPayload(parsed)) throw new Error(`Invalid fallback status payload after GitHub failure: ${String(githubError)}`);
+    if (!isLiveWorkStatusPayload(parsed)) throw new Error('Invalid safe status payload');
     return { payload: parsed, sourceUrl: LOCAL_STATUS_URL };
+  } catch (localError) {
+    const response = await fetchWithTimeout(RAW_GITHUB_STATUS_URL);
+    const parsed = await response.json() as unknown;
+    if (!isLiveWorkStatusPayload(parsed)) throw new Error(`Invalid raw GitHub fallback status payload after local failure: ${String(localError)}`);
+    return { payload: parsed, sourceUrl: 'raw-github:saintwooo-ai/homepage/public/work-status.json@main' };
   }
 };
 

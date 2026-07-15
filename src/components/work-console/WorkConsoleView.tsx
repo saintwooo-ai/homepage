@@ -165,7 +165,7 @@ function LiveWorkStatusPanel({ payload, connection, fetchedAt, sourceUrl, errorM
               LIVE WORK STATUS · {tone.label}
             </span>
             <span className="rounded-full border border-gray-700 bg-gray-950/50 px-3 py-1 font-mono text-[10px] text-gray-400">
-              polls safe public JSON every 5s
+              polls Vercel-served safe public JSON every 30s
             </span>
           </div>
 
@@ -173,7 +173,7 @@ function LiveWorkStatusPanel({ payload, connection, fetchedAt, sourceUrl, errorM
             {payload?.mission ?? '안전한 작업 상태를 불러오는 중'}
           </h2>
           <p className="mt-2 max-w-4xl text-sm leading-6 text-emerald-50/75">
-            {payload?.safeSummary ?? 'GitHub main의 public/work-status.json 또는 Vercel fallback에서 공개 가능한 작업 상태만 읽습니다.'}
+            {payload?.safeSummary ?? 'Vercel의 /work-status.json에서 공개 가능한 작업 상태만 읽습니다. Hermes runtime/session DB/gateway live 연결은 아직 아닙니다.'}
           </p>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -209,7 +209,7 @@ function LiveWorkStatusPanel({ payload, connection, fetchedAt, sourceUrl, errorM
 
         <aside className="relative w-full rounded-2xl border border-gray-800 bg-gray-950/55 p-4 xl:max-w-md">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-bold text-white">최근 실제 상태 이벤트</div>
+            <div className="text-sm font-bold text-white">최근 공개 safe status 이벤트</div>
             <div className="font-mono text-[10px] text-gray-500">fetched {formatLiveDateTime(fetchedAt)}</div>
           </div>
           <div className="mt-3 space-y-2">
