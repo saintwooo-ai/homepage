@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "npm run verify:work-console-source-boundary && npm run verify:work-console-server-handoff-contract && npm run verify:work-console-snapshot-policy && npm run verify:work-console-runtime-gate && vite build && npm run verify:work-console-dist-leak",
+    "build": "npm run verify:work-console-source-boundary && npm run verify:work-console-server-handoff-contract && npm run verify:work-console-snapshot-policy && npm run verify:work-console-dummy-serializer && npm run verify:work-console-runtime-gate && vite build && npm run verify:work-console-dist-leak",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
@@ -15,6 +15,7 @@
     "verify:work-console-source-boundary": "tsx scripts/verify-work-console-source-boundary.ts",
     "verify:work-console-server-handoff-contract": "tsx scripts/verify-work-console-server-handoff-contract.ts",
     "verify:work-console-snapshot-policy": "tsx scripts/verify-work-console-snapshot-policy.ts",
+    "verify:work-console-dummy-serializer": "tsx scripts/verify-work-console-dummy-serializer.ts",
     "verify:work-console-dist-leak": "tsx scripts/verify-work-console-dist-leak.ts"
   },
   "dependencies": {

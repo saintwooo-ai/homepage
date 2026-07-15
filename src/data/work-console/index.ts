@@ -15,3 +15,4 @@ export * from './cronDomainPolicy';
 export * from './cronOwnerPolicy';
 export * from './serverHandoffContractFixture';
 export * from './serverSnapshotPolicyFixture';
+export * from './serverSnapshotSerializer';
