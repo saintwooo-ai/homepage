@@ -73,6 +73,11 @@ assertRequiredFields('fixture', fixture);
 assertRequiredFields('docs example', docContract);
 assertDisabledReadiness('fixture', fixture);
 assertDisabledReadiness('docs example', docContract);
+assert.deepEqual(
+  docContract,
+  fixture,
+  'docs scanned readiness contract must be a full mirror of the fixture contract',
+);
 
 const requiredGateIds = [
   'traceable-user-approval',

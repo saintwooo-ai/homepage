@@ -102,7 +102,7 @@ A future snapshot must not expose:
 
 ## Scanned readiness example
 
-The following JSON block is scanned by `npm run verify:work-console-server-collector-readiness`. It must remain dummy-only and disabled.
+The following JSON block is scanned by `npm run verify:work-console-server-collector-readiness`. It must remain a full mirror of `WORK_CONSOLE_SERVER_COLLECTOR_READINESS_FIXTURE`, dummy-only, and disabled.
 
 <!-- work-console-collector-readiness-scan:start -->
 ```json
