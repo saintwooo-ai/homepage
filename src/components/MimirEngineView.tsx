@@ -5,17 +5,21 @@
 
 import React from 'react';
 import {
+  AlertCircle,
   ArrowRight,
   BrainCircuit,
+  CheckCircle2,
   Database,
   FileText,
   Layers3,
   Network,
+  RefreshCw,
   Search,
   Sparkles,
   SplitSquareHorizontal,
   Workflow,
 } from 'lucide-react';
+import { useKnowledgeReadOnlyData } from '../services/workConsoleKnowledgeReadOnly';
 
 const sourceNodes = [
   { label: '뉴스레터', detail: '매체·브랜드·트렌드 원문', icon: FileText },
@@ -52,7 +56,30 @@ const outputCards = [
   { title: '사업/전략', items: ['고객 문제', '가치제안', '검증 실험'] },
 ];
 
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+};
+
+const stateCopy = {
+  not_configured: 'Vercel Supabase 환경변수가 없어 DB를 읽을 수 없습니다.',
+  loading: 'Supabase 지식 DB를 읽는 중입니다.',
+  ready: '실제 DB 연결됨',
+  empty: 'DB 연결됨 · 지식카드는 아직 0건입니다.',
+  auth_or_rls_error: '로그인 권한 또는 RLS 정책 때문에 DB를 읽지 못했습니다.',
+  schema_error: '필요한 지식 테이블 구조를 찾지 못했습니다.',
+  unknown_error: 'DB 읽기 중 알 수 없는 오류가 발생했습니다.',
+};
+
 export default function MimirEngineView() {
+  const knowledge = useKnowledgeReadOnlyData();
+  const isConnected = knowledge.connectionState === 'ready' || knowledge.connectionState === 'empty';
+
   return (
     <div className="space-y-8 pb-16">
       <section className="relative overflow-hidden rounded-[2rem] border border-cyan-400/20 bg-gray-950/80 p-8 shadow-2xl shadow-cyan-950/20">
@@ -124,6 +151,123 @@ export default function MimirEngineView() {
             <p className="mt-3 text-xs leading-6 text-gray-400">{step.desc}</p>
           </div>
         ))}
+      </section>
+
+      <section className="rounded-[2rem] border border-cyan-400/20 bg-gray-950/80 p-6 shadow-2xl shadow-cyan-950/10">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-cyan-300">
+              <Database className="h-4 w-4" />
+              Live DB Read-only
+            </div>
+            <h2 className="text-2xl font-black text-white">Mimir DB 현황</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
+              Supabase의 실제 지식 테이블을 읽기 전용으로 보여줍니다. 이 화면에서는 생성·수정·삭제를 하지 않습니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void knowledge.reload()}
+            disabled={knowledge.loading}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${knowledge.loading ? 'animate-spin' : ''}`} />
+            DB 새로고침
+          </button>
+        </div>
+
+        <div className={`mb-5 flex items-start gap-3 rounded-2xl border p-4 ${isConnected ? 'border-emerald-400/20 bg-emerald-400/10' : 'border-amber-400/20 bg-amber-400/10'}`}>
+          {isConnected ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" /> : <AlertCircle className="mt-0.5 h-5 w-5 text-amber-300" />}
+          <div className="min-w-0">
+            <div className="text-sm font-black text-white">{stateCopy[knowledge.connectionState]}</div>
+            <div className="mt-1 text-xs text-gray-400">
+              마지막 읽기: {formatDate(knowledge.fetchedAt)}
+              {knowledge.errorMessage ? ` · ${knowledge.errorMessage}` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-6">
+          {[
+            ['지식카드', knowledge.counts.totalItems],
+            ['수집 원문', knowledge.counts.sources],
+            ['검토 대기', knowledge.counts.queue],
+            ['정리 필요', knowledge.counts.needsCuration],
+            ['승인됨', knowledge.counts.approved],
+            ['A등급', knowledge.counts.highGrade],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-2xl border border-gray-800 bg-gray-900/70 p-4">
+              <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500">{label}</div>
+              <div className="mt-2 text-3xl font-black text-white">{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-3xl border border-gray-800 bg-gray-900/60 p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-white">지식카드</h3>
+                <p className="text-xs text-gray-500">knowledge_items 실제 row</p>
+              </div>
+              <span className="rounded-full border border-gray-700 px-3 py-1 text-xs font-bold text-gray-400">{knowledge.items.length}개 표시</span>
+            </div>
+            {knowledge.items.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-950/60 p-6 text-center">
+                <div className="text-sm font-bold text-gray-200">아직 지식카드가 없습니다.</div>
+                <p className="mt-2 text-xs leading-6 text-gray-500">
+                  DB에는 연결됐지만 knowledge_items는 0건입니다. 먼저 수집 원문을 카드로 변환하는 단계가 필요합니다.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {knowledge.items.slice(0, 5).map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-gray-800 bg-gray-950/60 p-4">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-cyan-300">
+                      <span>{item.item_type}</span>
+                      <span className="text-gray-700">·</span>
+                      <span>{item.review_status}</span>
+                      <span className="text-gray-700">·</span>
+                      <span>{item.reuse_grade}</span>
+                    </div>
+                    <div className="mt-2 text-sm font-black text-white">{item.title}</div>
+                    <p className="mt-2 text-xs leading-5 text-gray-400">{item.one_line_summary}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-gray-800 bg-gray-900/60 p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-white">Source inbox</h3>
+                <p className="text-xs text-gray-500">지식카드 생성 대기 원문 · read-only</p>
+              </div>
+              <span className="rounded-full border border-gray-700 px-3 py-1 text-xs font-bold text-gray-400">{knowledge.sources.length}개 표시</span>
+            </div>
+            {knowledge.sources.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-700 bg-gray-950/60 p-6 text-center text-sm font-bold text-gray-300">
+                수집된 원문도 아직 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {knowledge.sources.slice(0, 6).map((source) => (
+                  <div key={source.id} className="rounded-2xl border border-gray-800 bg-gray-950/60 p-4">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-emerald-300">
+                      <span>{source.source_type}</span>
+                      {source.publisher ? <><span className="text-gray-700">·</span><span>{source.publisher}</span></> : null}
+                      <span className="text-gray-700">·</span>
+                      <span>{formatDate(source.collected_at)}</span>
+                    </div>
+                    <div className="mt-2 text-sm font-black text-white">{source.title}</div>
+                    {source.summary ? <p className="mt-2 text-xs leading-5 text-gray-400">{source.summary}</p> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">

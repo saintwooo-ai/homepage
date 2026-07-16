@@ -11,6 +11,7 @@ const files = [
   'src/services/workConsoleKnowledgeReadOnly.ts',
   'src/components/work-console/WorkConsoleKnowledgePanel.tsx',
   'src/components/work-console/WorkConsoleView.tsx',
+  'src/components/MimirEngineView.tsx',
 ];
 
 const requiredFiles = [
