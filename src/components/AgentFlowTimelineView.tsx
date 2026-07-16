@@ -14,7 +14,7 @@ import {
   LockKeyhole,
   ShieldCheck,
 } from 'lucide-react';
-import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/browser';
+import { EMPTY_KANBAN_SNAPSHOT } from './KanbanView';
 import type { AgentFlowStep, WorkConsoleSnapshot, WorkItemStatus } from '../types/workConsole';
 
 const statusTone: Record<WorkItemStatus, { label: string; badge: string; card: string; dot: string; icon: ReactNode }> = {
@@ -121,7 +121,7 @@ function TimelineStepCard({ step, isLast }: { step: AgentFlowStep; isLast: boole
   );
 }
 
-export default function AgentFlowTimelineView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
+export default function AgentFlowTimelineView({ snapshot = EMPTY_KANBAN_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
   const agentFlow = snapshot.agentFlow;
 
   return (

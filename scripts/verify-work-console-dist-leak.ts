@@ -48,16 +48,17 @@ for (const file of files) {
 }
 
 assert.deepEqual(findings, [], `forbidden Work Console runtime strings in dist:\n${findings.join('\n')}`);
-const contractChecks = [
-  { label: 'fixture-mode-visible', pattern: /Fixture mode/i },
-  { label: 'live-read-disabled-visible', pattern: /Live read disabled|Live read/i },
-  { label: 'server-handoff-visible', pattern: /Server handoff/i },
-  { label: 'production-not-approved-visible', pattern: /Production live connection not approved|Not approved/i },
-];
 
 const combinedBody = files.map(file => readFileSync(file, 'utf8')).join('\n');
-for (const check of contractChecks) {
-  assert.equal(check.pattern.test(combinedBody), true, `missing Work Console contract text in dist: ${check.label}`);
-}
+const removedMenuChecks: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'collaboration-profile-menu', pattern: /협업 프로필/ },
+  { label: 'knowledge-pipeline-menu', pattern: /지식 파이프라인/ },
+  { label: 'work-console-seed-title', pattern: /Work Console v1 요청 접수/ },
+  { label: 'work-console-seed-label', pattern: /Work Console mock-only adapter seed/ },
+];
+const removedMenuFindings = removedMenuChecks
+  .filter((check) => check.pattern.test(combinedBody))
+  .map((check) => check.label);
+assert.deepEqual(removedMenuFindings, [], `removed menu/mock strings still present in dist:\n${removedMenuFindings.join('\n')}`);
 
-console.log(`Work Console Phase 3C-4 dist leak scan passed (${files.length} files scanned)`);
+console.log(`Homepage dist leak scan passed (${files.length} files scanned)`);

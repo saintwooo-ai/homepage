@@ -24,7 +24,6 @@ import {
   TrendingUp,
   UserRoundCheck,
 } from 'lucide-react';
-import { MOCK_WORK_CONSOLE_SNAPSHOT } from '../data/work-console/browser';
 import type { WorkConsoleSnapshot, WorkItem, WorkItemStatus } from '../types/workConsole';
 
 interface WorkStatusColumn {
@@ -156,6 +155,53 @@ const progressStyles: Record<WorkItemStatus, string> = {
   blocked: 'from-rose-400 to-red-600',
   in_review: 'from-violet-400 to-fuchsia-500',
   completed: 'from-emerald-400 to-green-500',
+};
+
+export const EMPTY_KANBAN_SNAPSHOT: WorkConsoleSnapshot = {
+  summary: {
+    mode: 'mock',
+    generatedAt: '2026-07-16T00:00:00.000Z',
+    sourceLabel: 'empty local board',
+    statusLabels: {
+      queued: '대기',
+      running: '진행중',
+      needs_approval: '승인필요',
+      blocked: '막힘',
+      in_review: '검토중',
+      completed: '완료',
+    },
+    phase2Notice: '초기화 상태입니다. 이전 작업 mock seed와 지식 mock 데이터는 이 화면에 연결하지 않습니다.',
+  },
+  sourceStatus: {
+    kind: 'mock-fixture',
+    connectionState: 'not_configured',
+    readOnly: true,
+    liveDisabled: true,
+    label: '초기화됨',
+    message: '외부 작업 데이터와 연결하지 않은 빈 보드입니다.',
+    safetyNotes: ['실제 DB/API/gateway/session에 연결하지 않습니다.'],
+    liveConnection: {
+      fixtureMode: true,
+      liveReadDisabled: true,
+      serverHandoffRequired: false,
+      productionLiveApproved: false,
+      currentPhase: '3C-4-safe-contract',
+      nextPhase: '3D-server-handoff-design',
+      statusMessage: '초기화 상태',
+    },
+    serverHandoff: {
+      required: false,
+      status: 'not_required',
+      owner: 'frontend',
+      note: '초기 빈 보드라 server handoff 없음',
+    },
+    approvalGates: [],
+    checkedAt: '2026-07-16T00:00:00.000Z',
+  },
+  workItems: [],
+  profileStates: [],
+  events: [],
+  agentFlow: [],
 };
 
 const getColumnItems = (workItems: WorkItem[], status: WorkItemStatus) => workItems.filter(item => item.status === status);
@@ -351,7 +397,7 @@ function WorkItemCard({
   );
 }
 
-export default function KanbanView({ snapshot = MOCK_WORK_CONSOLE_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
+export default function KanbanView({ snapshot = EMPTY_KANBAN_SNAPSHOT }: { snapshot?: WorkConsoleSnapshot }) {
   const [mockApprovedIds, setMockApprovedIds] = useState<string[]>([]);
   const [localOverrides, setLocalOverrides] = useState<Record<string, LocalWorkItemOverride>>({});
   const [localEvents, setLocalEvents] = useState<LocalEvent[]>([]);
