@@ -289,6 +289,38 @@ export default function WorkConsoleKnowledgePanel() {
             );
           })}
         </div>
+
+        {data.sources.length > 0 && (
+          <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-amber-200">Source inbox · read-only</div>
+                <h3 className="mt-1 text-sm font-black text-white">지식카드 생성 대기 원문</h3>
+                <p className="mt-1 text-xs leading-5 text-amber-100/70">현재 DB에 들어온 원문 자료입니다. 다음 단계에서 이 source를 지식카드 후보로 변환하고 review queue에 넣는 쓰기 플로우를 연결합니다.</p>
+              </div>
+              <button type="button" disabled className="inline-flex cursor-not-allowed items-center justify-center rounded-xl border border-amber-500/20 bg-gray-950/70 px-3 py-2 text-xs font-black text-gray-600">
+                지식카드 생성 잠금
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {data.sources.map((source) => (
+                <div key={source.id} className="rounded-xl border border-gray-800 bg-gray-950/55 p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap gap-2">
+                        <MiniBadge>{source.source_type}</MiniBadge>
+                        {source.publisher && <MiniBadge>{source.publisher}</MiniBadge>}
+                      </div>
+                      <div className="mt-2 truncate text-sm font-bold text-gray-100">{source.title}</div>
+                      {source.summary && <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-gray-500">{source.summary}</p>}
+                    </div>
+                    <div className="shrink-0 font-mono text-[11px] text-gray-500">수집 {formatDate(source.collected_at)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <DetailDrawer item={selectedItem} source={selectedSource} onClose={() => setSelectedId(null)} />
