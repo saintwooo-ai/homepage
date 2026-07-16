@@ -11,8 +11,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
-  Cpu, 
-  Database, 
   Terminal, 
   RefreshCw, 
   Sun, 
@@ -22,7 +20,6 @@ import {
   Clock,
   Play,
   Layers,
-  Activity,
   GitBranch,
   Users,
   UserRound
@@ -39,9 +36,6 @@ import {
 // Sub Views Import
 import DashboardView from './components/DashboardView';
 import KanbanView from './components/KanbanView';
-import ProfilesView from './components/ProfilesView';
-import KnowledgeView from './components/KnowledgeView';
-import WorkConsoleView from './components/work-console/WorkConsoleView';
 import AgentFlowTimelineView from './components/AgentFlowTimelineView';
 import EventsView from './components/EventsView';
 import MembersView from './components/MembersView';
@@ -51,7 +45,7 @@ import { useAuth } from './auth/AuthContext';
 export default function App() {
   // Navigation & UI State
   const { isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'kanban' | 'profiles' | 'agentFlow' | 'knowledge' | 'events' | 'members' | 'account' | 'workConsole'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'kanban' | 'agentFlow' | 'events' | 'members' | 'account'>('dashboard');
   const [darkMode, setDarkMode] = useState<boolean>(true); // Default dark mode as recommended
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
@@ -144,7 +138,7 @@ export default function App() {
             status: 'healthy',
             callCount: p.callCount + 1,
             lastUsedAt: '방금 전',
-            recentTask: '백그라운드 지식 파이프라인 정기 검사 정합성 체크'
+            recentTask: '백그라운드 정기 검사 정합성 체크'
           };
         }
         return p;
@@ -581,30 +575,6 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => { setActiveTab('workConsole'); setIsSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
-                  activeTab === 'workConsole'
-                    ? (darkMode ? 'bg-indigo-500/10 text-cyan-400 border border-indigo-500/20' : 'bg-indigo-500/5 text-indigo-600 border border-indigo-500/15')
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/10'
-                }`}
-              >
-                <Activity className="w-4 h-4" />
-                Work Console
-              </button>
-              
-              <button
-                onClick={() => { setActiveTab('profiles'); setIsSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
-                  activeTab === 'profiles'
-                    ? (darkMode ? 'bg-indigo-500/10 text-cyan-400 border border-indigo-500/20' : 'bg-indigo-500/5 text-indigo-600 border border-indigo-500/15')
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/10'
-                }`}
-              >
-                <Cpu className="w-4 h-4" />
-                협업 프로필
-              </button>
-
-              <button
                 onClick={() => { setActiveTab('agentFlow'); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
                   activeTab === 'agentFlow'
@@ -614,18 +584,6 @@ export default function App() {
               >
                 <GitBranch className="w-4 h-4" />
                 에이전트 플로우
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('knowledge'); setIsSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
-                  activeTab === 'knowledge'
-                    ? (darkMode ? 'bg-indigo-500/10 text-cyan-400 border border-indigo-500/20' : 'bg-indigo-500/5 text-indigo-600 border border-indigo-500/15')
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/10'
-                }`}
-              >
-                <Database className="w-4 h-4" />
-                지식 파이프라인
               </button>
 
               <button
@@ -735,20 +693,8 @@ export default function App() {
             <KanbanView />
           )}
 
-          {activeTab === 'workConsole' && (
-            <WorkConsoleView />
-          )}
-
-          {activeTab === 'profiles' && (
-            <ProfilesView profiles={profiles} />
-          )}
-
           {activeTab === 'agentFlow' && (
             <AgentFlowTimelineView />
-          )}
-
-          {activeTab === 'knowledge' && (
-            <KnowledgeView knowledge={knowledge} />
           )}
 
           {activeTab === 'events' && (
