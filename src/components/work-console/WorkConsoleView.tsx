@@ -30,6 +30,7 @@ import ApprovalBlockerPanel from '../ApprovalBlockerPanel';
 import KanbanView from '../KanbanView';
 import MimirPhase2Panel from '../MimirPhase2Panel';
 import ProfileWorkStatePanel from '../ProfileWorkStatePanel';
+import WorkConsoleKnowledgePanel from './WorkConsoleKnowledgePanel';
 import type {
   ProfileWorkState,
   WorkConsoleServerSnapshotPolicyEnvelope,
@@ -553,6 +554,8 @@ export default function WorkConsoleView({ snapshot = DEFAULT_WORK_CONSOLE_SNAPSH
           </p>
         </div>
       </section>
+
+      <WorkConsoleKnowledgePanel />
 
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-blue-500/20 bg-blue-950/10 p-5">
